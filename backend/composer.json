@@ -32,6 +32,9 @@
     },
     "config": {
         "optimize-autoloader": true,
+        "platform": {
+            "php": "8.2.32"
+        },
         "preferred-install": "dist",
         "sort-packages": true
     },
