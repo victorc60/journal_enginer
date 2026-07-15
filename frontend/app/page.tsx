@@ -39,19 +39,12 @@ export default function HomePage() {
         </p>
 
         <div className="action-list" aria-label="Primary actions">
-          {actions.map((action) =>
-            action.href ? (
-              <Link key={action.label} href={action.href} className="action-button">
-                <span className="action-button-label">{action.label}</span>
-                <span className="action-button-hint">{action.hint}</span>
-              </Link>
-            ) : (
-              <button key={action.label} type="button" className="action-button">
-                <span className="action-button-label">{action.label}</span>
-                <span className="action-button-hint">{action.hint}</span>
-              </button>
-            ),
-          )}
+          {actions.map((action) => (
+            <Link key={action.label} href={action.href} className="action-button">
+              <span className="action-button-label">{action.label}</span>
+              <span className="action-button-hint">{action.hint}</span>
+            </Link>
+          ))}
         </div>
       </section>
     </main>
