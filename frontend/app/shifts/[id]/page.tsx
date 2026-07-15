@@ -129,167 +129,195 @@ async function getShift(id: string) {
 
 export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) {
   const { id } = await params;
-  const shift = await getShift(id);
 
-  const notesByCategory = new Map<string, ShiftNote[]>();
+  try {
+    const shift = await getShift(id);
 
-  for (const note of shift.shift_notes) {
-    const current = notesByCategory.get(note.category) ?? [];
-    current.push(note);
-    notesByCategory.set(note.category, current);
+    const notesByCategory = new Map<string, ShiftNote[]>();
+
+    for (const note of shift.shift_notes) {
+      const current = notesByCategory.get(note.category) ?? [];
+      current.push(note);
+      notesByCategory.set(note.category, current);
+    }
+
+    return (
+      <main className="page-shell page-shell-top">
+        <section className="hero-card detail-card">
+          <Link href="/shifts" className="back-link">
+            Back to shifts
+          </Link>
+
+          <p className="eyebrow">Shift detail</p>
+          <h1>{formatDate(shift.shift_date)}</h1>
+          <p className="intro">Full production entry with temperatures, notes, failures, and maintenance.</p>
+
+          <div className="detail-stack">
+            <section className="detail-section">
+              <h2 className="section-title">Shift fields</h2>
+              <dl className="detail-grid">
+                <div className="detail-row">
+                  <dt>Shift ID</dt>
+                  <dd>{shift.id}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Shift date</dt>
+                  <dd>{formatDate(shift.shift_date)}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Heads count</dt>
+                  <dd>{formatValue(shift.heads_count)}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Work hours</dt>
+                  <dd>{formatValue(shift.work_hours, "hours")}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>CO2 start</dt>
+                  <dd>{formatValue(shift.co2_start_kg, "kg")}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>CO2 end</dt>
+                  <dd>{formatValue(shift.co2_end_kg, "kg")}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>CO2 used</dt>
+                  <dd>{formatValue(shift.co2_used_kg, "kg")}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>CO2 per head</dt>
+                  <dd>{formatValue(shift.co2_per_head_g, "g")}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Outside temp</dt>
+                  <dd>{formatValue(shift.outside_temp_c, "°C")}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Chiller temp</dt>
+                  <dd>{formatValue(shift.chiller_temp_c, "°C")}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Meat temp</dt>
+                  <dd>{formatValue(shift.meat_temp_c, "°C")}</dd>
+                </div>
+                <div className="detail-row detail-row-wide">
+                  <dt>Raw text</dt>
+                  <dd>{shift.raw_text || "—"}</dd>
+                </div>
+                <div className="detail-row detail-row-wide">
+                  <dt>Notes</dt>
+                  <dd>{shift.notes || "—"}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Created</dt>
+                  <dd>{formatDateTime(shift.created_at)}</dd>
+                </div>
+                <div className="detail-row">
+                  <dt>Updated</dt>
+                  <dd>{formatDateTime(shift.updated_at)}</dd>
+                </div>
+              </dl>
+            </section>
+
+            {noteSections.map((section) => {
+              const categoryNotes = notesByCategory.get(section.key) ?? [];
+              const isFailures = section.key === "failures";
+              const isMaintenance = section.key === "maintenance";
+              const hasStructuredContent =
+                (isFailures && shift.failures.length > 0) ||
+                (isMaintenance && shift.maintenance_events.length > 0);
+
+              return (
+                <section key={section.key} className="detail-section">
+                  <h2 className="section-title">{section.title}</h2>
+
+                  {categoryNotes.length > 0 ? (
+                    <div className="category-note-list">
+                      {categoryNotes.map((note) => (
+                        <article key={note.id} className="list-card">
+                          <p className="category-note-copy">{note.content}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : !hasStructuredContent ? (
+                    <p className="section-empty">No {section.title.toLowerCase()} notes recorded for this shift.</p>
+                  ) : null}
+
+                  {isFailures && shift.failures.length > 0 ? (
+                    <div className="entry-list structured-list">
+                      {shift.failures.map((failure) => (
+                        <article key={failure.id} className="entry-item">
+                          <p className="entry-title">
+                            {failure.equipment_name || "General equipment issue"}
+                            {failure.severity ? ` · ${failure.severity}` : ""}
+                          </p>
+                          <p className="entry-copy">
+                            <strong>Problem:</strong> {failure.problem}
+                          </p>
+                          <p className="entry-copy">
+                            <strong>Cause:</strong> {failure.cause || "—"}
+                          </p>
+                          <p className="entry-copy">
+                            <strong>Solution:</strong> {failure.solution || "—"}
+                          </p>
+                          <p className="entry-copy">
+                            <strong>Downtime:</strong>{" "}
+                            {failure.downtime_minutes !== null ? `${failure.downtime_minutes} min` : "—"}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {isMaintenance && shift.maintenance_events.length > 0 ? (
+                    <div className="entry-list structured-list">
+                      {shift.maintenance_events.map((event) => (
+                        <article key={event.id} className="entry-item">
+                          <p className="entry-title">{event.equipment_name || "General maintenance"}</p>
+                          <p className="entry-copy">
+                            <strong>Action:</strong> {event.action}
+                          </p>
+                          <p className="entry-copy">
+                            <strong>Parts used:</strong> {event.parts_used || "—"}
+                          </p>
+                          <p className="entry-copy">
+                            <strong>Notes:</strong> {event.notes || "—"}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
+          </div>
+        </section>
+      </main>
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load shift details.";
+
+    return (
+      <main className="page-shell page-shell-top">
+        <section className="hero-card detail-card">
+          <Link href="/shifts" className="back-link">
+            Back to shifts
+          </Link>
+
+          <p className="eyebrow">Shift detail</p>
+          <h1>Shift unavailable</h1>
+          <p className="intro">The full shift record could not be loaded right now.</p>
+
+          <div className="status-banner status-error" role="alert">
+            <p className="status-title">Shift details are temporarily unavailable.</p>
+            <p className="status-copy">{message}</p>
+            <p className="status-copy">
+              Check that <code>NEXT_PUBLIC_API_BASE_URL</code> points to the Railway backend domain and that
+              <code> /api/shifts/{id}</code> returns JSON.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
   }
-
-  return (
-    <main className="page-shell page-shell-top">
-      <section className="hero-card detail-card">
-        <Link href="/shifts" className="back-link">
-          Back to shifts
-        </Link>
-
-        <p className="eyebrow">Shift detail</p>
-        <h1>{formatDate(shift.shift_date)}</h1>
-        <p className="intro">Full production entry with temperatures, notes, failures, and maintenance.</p>
-
-        <div className="detail-stack">
-          <section className="detail-section">
-            <h2 className="section-title">Shift fields</h2>
-            <dl className="detail-grid">
-              <div className="detail-row">
-                <dt>Shift ID</dt>
-                <dd>{shift.id}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Shift date</dt>
-                <dd>{formatDate(shift.shift_date)}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Heads count</dt>
-                <dd>{formatValue(shift.heads_count)}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Work hours</dt>
-                <dd>{formatValue(shift.work_hours, "hours")}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>CO2 start</dt>
-                <dd>{formatValue(shift.co2_start_kg, "kg")}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>CO2 end</dt>
-                <dd>{formatValue(shift.co2_end_kg, "kg")}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>CO2 used</dt>
-                <dd>{formatValue(shift.co2_used_kg, "kg")}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>CO2 per head</dt>
-                <dd>{formatValue(shift.co2_per_head_g, "g")}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Outside temp</dt>
-                <dd>{formatValue(shift.outside_temp_c, "°C")}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Chiller temp</dt>
-                <dd>{formatValue(shift.chiller_temp_c, "°C")}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Meat temp</dt>
-                <dd>{formatValue(shift.meat_temp_c, "°C")}</dd>
-              </div>
-              <div className="detail-row detail-row-wide">
-                <dt>Raw text</dt>
-                <dd>{shift.raw_text || "—"}</dd>
-              </div>
-              <div className="detail-row detail-row-wide">
-                <dt>Notes</dt>
-                <dd>{shift.notes || "—"}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Created</dt>
-                <dd>{formatDateTime(shift.created_at)}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Updated</dt>
-                <dd>{formatDateTime(shift.updated_at)}</dd>
-              </div>
-            </dl>
-          </section>
-
-          {noteSections.map((section) => {
-            const categoryNotes = notesByCategory.get(section.key) ?? [];
-            const isFailures = section.key === "failures";
-            const isMaintenance = section.key === "maintenance";
-            const hasStructuredContent =
-              (isFailures && shift.failures.length > 0) ||
-              (isMaintenance && shift.maintenance_events.length > 0);
-
-            return (
-              <section key={section.key} className="detail-section">
-                <h2 className="section-title">{section.title}</h2>
-
-                {categoryNotes.length > 0 ? (
-                  <div className="category-note-list">
-                    {categoryNotes.map((note) => (
-                      <article key={note.id} className="list-card">
-                        <p className="category-note-copy">{note.content}</p>
-                      </article>
-                    ))}
-                  </div>
-                ) : !hasStructuredContent ? (
-                  <p className="section-empty">No {section.title.toLowerCase()} notes recorded for this shift.</p>
-                ) : null}
-
-                {isFailures && shift.failures.length > 0 ? (
-                  <div className="entry-list structured-list">
-                    {shift.failures.map((failure) => (
-                      <article key={failure.id} className="entry-item">
-                        <p className="entry-title">
-                          {failure.equipment_name || "General equipment issue"}
-                          {failure.severity ? ` · ${failure.severity}` : ""}
-                        </p>
-                        <p className="entry-copy">
-                          <strong>Problem:</strong> {failure.problem}
-                        </p>
-                        <p className="entry-copy">
-                          <strong>Cause:</strong> {failure.cause || "—"}
-                        </p>
-                        <p className="entry-copy">
-                          <strong>Solution:</strong> {failure.solution || "—"}
-                        </p>
-                        <p className="entry-copy">
-                          <strong>Downtime:</strong>{" "}
-                          {failure.downtime_minutes !== null ? `${failure.downtime_minutes} min` : "—"}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
-
-                {isMaintenance && shift.maintenance_events.length > 0 ? (
-                  <div className="entry-list structured-list">
-                    {shift.maintenance_events.map((event) => (
-                      <article key={event.id} className="entry-item">
-                        <p className="entry-title">{event.equipment_name || "General maintenance"}</p>
-                        <p className="entry-copy">
-                          <strong>Action:</strong> {event.action}
-                        </p>
-                        <p className="entry-copy">
-                          <strong>Parts used:</strong> {event.parts_used || "—"}
-                        </p>
-                        <p className="entry-copy">
-                          <strong>Notes:</strong> {event.notes || "—"}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
-        </div>
-      </section>
-    </main>
-  );
 }
