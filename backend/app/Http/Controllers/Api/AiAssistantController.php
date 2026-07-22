@@ -11,8 +11,8 @@ class AiAssistantController extends Controller
 {
     public function ask(AskAiQuestionRequest $request, AiAssistantService $assistant): JsonResponse
     {
-        $question = $request->validated()['question'];
-        $answer = $assistant->ask($question);
+        $validated = $request->validated();
+        $answer = $assistant->ask($validated['question'], $validated);
 
         return response()->json([
             'answer' => $answer,

@@ -3,22 +3,32 @@ import Link from "next/link";
 const actions = [
   {
     label: "Record shift",
-    hint: "Capture a shift quickly with manual entry or dictated text.",
+    hint: "Capture a shift with dictation, handover items, and attachments.",
     href: "/record",
   },
   {
     label: "Dashboard",
-    hint: "See production, CO2, temperature, and failure trends.",
+    hint: "Track production, CO2, temperature, failures, and open handover.",
     href: "/dashboard",
   },
   {
     label: "Shift history",
-    hint: "Open saved shifts and review full details by date.",
+    hint: "Search, filter, export, and open full shift records.",
     href: "/shifts",
   },
   {
+    label: "Handover board",
+    hint: "See open issues across shifts and update their status.",
+    href: "/handover",
+  },
+  {
+    label: "Equipment",
+    hint: "Open equipment cards with failures, downtime, and maintenance.",
+    href: "/equipment",
+  },
+  {
     label: "AI assistant",
-    hint: "Ask questions using the saved journal database.",
+    hint: "Run weekly summaries, equipment digests, and journal Q&A.",
     href: "/chat",
   },
   {
@@ -35,7 +45,8 @@ export default function HomePage() {
         <p className="eyebrow">Industrial shift journal</p>
         <h1>Factory AI Journal</h1>
         <p className="intro">
-          A simple workspace for capturing production notes, incidents, and end-of-shift context.
+          A practical engineer workspace for recording shifts, passing issues forward, and keeping the production
+          picture visible.
         </p>
 
         <div className="action-list" aria-label="Primary actions">

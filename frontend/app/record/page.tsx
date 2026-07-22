@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { apiBaseUrl, extractApiError } from "@/lib/api";
+import { formatCo2PerHead, formatMetric } from "@/lib/format";
 
 type FailurePreview = {
   equipment_name: string | null;
@@ -19,6 +21,15 @@ type MaintenanceEventPreview = {
   notes: string | null;
 };
 
+type HandoverPreview = {
+  equipment_name: string | null;
+  title: string | null;
+  details: string | null;
+  assigned_to: string | null;
+  due_date: string | null;
+  priority: string | null;
+};
+
 type ParsedShiftPreview = {
   shift_date: string;
   heads_count: number | null;
@@ -33,6 +44,7 @@ type ParsedShiftPreview = {
   notes: string | null;
   failures: FailurePreview[];
   maintenance_events: MaintenanceEventPreview[];
+  handover_items: HandoverPreview[];
 };
 
 type PreviewResponse = {
@@ -40,26 +52,16 @@ type PreviewResponse = {
   parsed: ParsedShiftPreview;
 };
 
-type ShiftResponse = {
+type SavedShiftResponse = {
   id: number;
   shift_date: string;
-  heads_count: number | null;
-  co2_used_kg: string | number | null;
   co2_per_head_g: string | number | null;
-  outside_temp_c: string | number | null;
-  chiller_temp_c: string | number | null;
-  meat_temp_c: string | number | null;
-  raw_text: string;
-  notes?: string | null;
-  failures?: FailurePreview[];
-  maintenance_events?: MaintenanceEventPreview[];
-  created_at: string;
-  updated_at: string;
 };
 
 type FormValues = {
   shiftDate: string;
   headsCount: string;
+  workHours: string;
   co2UsedKg: string;
   outsideTempC: string;
   chillerTempC: string;
@@ -67,9 +69,24 @@ type FormValues = {
   notes: string;
 };
 
+type HandoverDraft = {
+  title: string;
+  details: string;
+  equipment_name: string;
+  assigned_to: string;
+  due_date: string;
+  priority: string;
+};
+
+type ChecklistResult = {
+  critical: string[];
+  advisory: string[];
+};
+
 const initialValues: FormValues = {
   shiftDate: "",
   headsCount: "",
+  workHours: "",
   co2UsedKg: "",
   outsideTempC: "",
   chillerTempC: "",
@@ -77,7 +94,16 @@ const initialValues: FormValues = {
   notes: "",
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+function createHandoverDraft(): HandoverDraft {
+  return {
+    title: "",
+    details: "",
+    equipment_name: "",
+    assigned_to: "",
+    due_date: "",
+    priority: "normal",
+  };
+}
 
 function getPreferredMimeType() {
   if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") {
@@ -109,34 +135,170 @@ function parseNumber(value: string) {
   return Number(value);
 }
 
-function formatCo2PerHead(value: string | number | null) {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
-  return `${Number(value).toFixed(2)} g/head`;
+function normalizeManualHandoverItems(items: HandoverDraft[]) {
+  return items
+    .map((item) => ({
+      title: item.title.trim() || item.details.trim().slice(0, 160),
+      details: item.details.trim() || null,
+      equipment_name: item.equipment_name.trim() || null,
+      assigned_to: item.assigned_to.trim() || null,
+      due_date: item.due_date || null,
+      priority: item.priority || "normal",
+    }))
+    .filter((item) => item.title !== "");
 }
 
-function formatMetric(value: string | number | null, suffix: string) {
-  if (value === null || value === undefined || value === "") {
-    return "—";
+function buildManualChecklist(values: FormValues, handoverItems: HandoverDraft[], selectedFiles: File[]): ChecklistResult {
+  const hasManualActivity =
+    values.shiftDate.trim() !== "" ||
+    values.headsCount.trim() !== "" ||
+    values.workHours.trim() !== "" ||
+    values.co2UsedKg.trim() !== "" ||
+    values.outsideTempC.trim() !== "" ||
+    values.chillerTempC.trim() !== "" ||
+    values.meatTempC.trim() !== "" ||
+    values.notes.trim() !== "" ||
+    handoverItems.some(
+      (item) =>
+        item.title.trim() !== "" ||
+        item.details.trim() !== "" ||
+        item.equipment_name.trim() !== "" ||
+        item.assigned_to.trim() !== "" ||
+        item.due_date.trim() !== "",
+    ) ||
+    selectedFiles.length > 0;
+
+  if (!hasManualActivity) {
+    return { critical: [], advisory: [] };
   }
 
-  return `${Number(value).toFixed(2)} ${suffix}`;
+  const critical: string[] = [];
+  const advisory: string[] = [];
+
+  if (values.shiftDate.trim() === "") {
+    critical.push("Не указана дата смены.");
+  }
+
+  if (values.headsCount.trim() === "") {
+    critical.push("Не указано количество голов.");
+  }
+
+  if (values.co2UsedKg.trim() === "") {
+    critical.push("Не указан расход CO2.");
+  }
+
+  if (values.chillerTempC.trim() === "") {
+    critical.push("Не указана температура холодильника.");
+  }
+
+  if (values.meatTempC.trim() === "") {
+    critical.push("Не указана температура мяса.");
+  }
+
+  const partialHandoverRows = handoverItems.filter((item) => {
+    const hasSomeContent =
+      item.title.trim() !== "" ||
+      item.details.trim() !== "" ||
+      item.equipment_name.trim() !== "" ||
+      item.assigned_to.trim() !== "" ||
+      item.due_date.trim() !== "";
+
+    return hasSomeContent && item.title.trim() === "" && item.details.trim() === "";
+  });
+
+  if (partialHandoverRows.length > 0) {
+    critical.push("Есть незаполненные handover-пункты без заголовка или описания.");
+  }
+
+  if (values.notes.trim() === "") {
+    advisory.push("Нет текстовых заметок по смене.");
+  }
+
+  if (normalizeManualHandoverItems(handoverItems).length === 0) {
+    advisory.push("Нет handover-пунктов для следующей смены.");
+  }
+
+  if (selectedFiles.length === 0) {
+    advisory.push("Нет фото, аудио или документов во вложениях.");
+  }
+
+  return { critical, advisory };
 }
 
-async function extractApiError(response: Response) {
-  try {
-    const data = (await response.json()) as { message?: string };
-    return data.message ?? "Request failed.";
-  } catch {
-    return "Request failed.";
+function buildAiChecklist(parsedPreview: ParsedShiftPreview | null, selectedFiles: File[], dictatedText: string): ChecklistResult {
+  if (!parsedPreview && dictatedText.trim() === "") {
+    return { critical: [], advisory: [] };
   }
+
+  if (!parsedPreview) {
+    return { critical: ["Сначала сделайте Preview parse перед сохранением AI-отчета."], advisory: [] };
+  }
+
+  const critical: string[] = [];
+  const advisory: string[] = [];
+
+  if (parsedPreview.heads_count === null) {
+    critical.push("AI не распознал количество голов.");
+  }
+
+  if (parsedPreview.co2_used_kg === null) {
+    critical.push("AI не распознал расход CO2.");
+  }
+
+  if (parsedPreview.chiller_temp_c === null) {
+    critical.push("AI не распознал температуру холодильника.");
+  }
+
+  if (parsedPreview.meat_temp_c === null) {
+    critical.push("AI не распознал температуру мяса.");
+  }
+
+  if (parsedPreview.failures.length > 0 && parsedPreview.handover_items.length === 0) {
+    advisory.push("Есть поломки, но нет handover-пунктов для следующей смены.");
+  }
+
+  if (!parsedPreview.notes && parsedPreview.failures.length === 0 && parsedPreview.maintenance_events.length === 0) {
+    advisory.push("В отчете мало контекста кроме числовых полей.");
+  }
+
+  if (selectedFiles.length === 0) {
+    advisory.push("Нет фото, аудио или документов во вложениях.");
+  }
+
+  return { critical, advisory };
+}
+
+async function uploadShiftAttachments(shiftId: number, files: File[]) {
+  if (files.length === 0) {
+    return 0;
+  }
+
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append("files[]", file);
+  });
+
+  const response = await fetch(`${apiBaseUrl}/api/shifts/${shiftId}/attachments`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await extractApiError(response, "Shift saved, but attachments failed to upload."));
+  }
+
+  const uploaded = (await response.json()) as unknown[];
+  return uploaded.length;
 }
 
 export default function RecordPage() {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [dictatedText, setDictatedText] = useState("");
+  const [manualHandoverItems, setManualHandoverItems] = useState<HandoverDraft[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState<"preview" | "save" | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -145,12 +307,18 @@ export default function RecordPage() {
   const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null);
   const [recordingErrorMessage, setRecordingErrorMessage] = useState<string | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<string | null>(null);
-  const [savedShift, setSavedShift] = useState<ShiftResponse | null>(null);
+  const [attachmentStatusMessage, setAttachmentStatusMessage] = useState<string | null>(null);
+  const [savedShift, setSavedShift] = useState<SavedShiftResponse | null>(null);
   const [parsedPreview, setParsedPreview] = useState<ParsedShiftPreview | null>(null);
-  const [aiSavedShift, setAiSavedShift] = useState<ShiftResponse | null>(null);
+  const [aiSavedShift, setAiSavedShift] = useState<SavedShiftResponse | null>(null);
+  const [manualChecklistConfirmed, setManualChecklistConfirmed] = useState(false);
+  const [aiChecklistConfirmed, setAiChecklistConfirmed] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+
+  const manualChecklist = buildManualChecklist(values, manualHandoverItems, selectedFiles);
+  const aiChecklist = buildAiChecklist(parsedPreview, selectedFiles, dictatedText);
 
   useEffect(() => {
     return () => {
@@ -162,11 +330,27 @@ export default function RecordPage() {
     };
   }, []);
 
+  const resetSharedArtifacts = () => {
+    setSelectedFiles([]);
+  };
+
+  const handleAttachmentUpload = async (shiftId: number) => {
+    if (selectedFiles.length === 0) {
+      setAttachmentStatusMessage("No attachments were selected.");
+      return;
+    }
+
+    const uploadedCount = await uploadShiftAttachments(shiftId, selectedFiles);
+    setAttachmentStatusMessage(`Uploaded ${uploadedCount} attachment${uploadedCount === 1 ? "" : "s"}.`);
+    setSelectedFiles([]);
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
     setSavedShift(null);
+    setAttachmentStatusMessage(null);
 
     try {
       const response = await fetch(`${apiBaseUrl}/api/shifts/manual`, {
@@ -178,22 +362,32 @@ export default function RecordPage() {
         body: JSON.stringify({
           shift_date: values.shiftDate,
           heads_count: parseNumber(values.headsCount),
+          work_hours: parseNumber(values.workHours),
           co2_used_kg: parseNumber(values.co2UsedKg),
           outside_temp_c: parseNumber(values.outsideTempC),
           chiller_temp_c: parseNumber(values.chillerTempC),
           meat_temp_c: parseNumber(values.meatTempC),
           raw_text: values.notes.trim(),
           notes: values.notes.trim() || null,
+          handover_items: normalizeManualHandoverItems(manualHandoverItems),
         }),
       });
 
       if (!response.ok) {
-        throw new Error(await extractApiError(response));
+        throw new Error(await extractApiError(response, "Unable to save the shift."));
       }
 
-      const data: ShiftResponse = await response.json();
+      const data: SavedShiftResponse = await response.json();
+
+      if (selectedFiles.length > 0) {
+        await handleAttachmentUpload(data.id);
+      }
+
       setSavedShift(data);
       setValues(initialValues);
+      setManualHandoverItems([]);
+      setManualChecklistConfirmed(false);
+      resetSharedArtifacts();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to save the shift.");
     } finally {
@@ -219,7 +413,7 @@ export default function RecordPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await extractApiError(response));
+        throw new Error(await extractApiError(response, "Unable to transcribe the audio."));
       }
 
       const data = (await response.json()) as { text: string };
@@ -228,7 +422,8 @@ export default function RecordPage() {
       setParsedPreview(null);
       setAiSavedShift(null);
       setAiErrorMessage(null);
-      setRecordingStatus("Transcript added to the dictated report. Review and edit it before saving.");
+      setAiChecklistConfirmed(false);
+      setRecordingStatus("Transcript added to the dictated report. Review it, run Preview parse, then save.");
     } catch (error) {
       setRecordingErrorMessage(error instanceof Error ? error.message : "Unable to transcribe the audio.");
       setRecordingStatus(null);
@@ -252,6 +447,7 @@ export default function RecordPage() {
     setParsedPreview(null);
     setAiSavedShift(null);
     setAiErrorMessage(null);
+    setAiChecklistConfirmed(false);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -302,9 +498,7 @@ export default function RecordPage() {
       mediaRecorderRef.current = null;
       recordedChunksRef.current = [];
       setIsRecording(false);
-      setRecordingErrorMessage(
-        error instanceof Error ? error.message : "Unable to access the microphone.",
-      );
+      setRecordingErrorMessage(error instanceof Error ? error.message : "Unable to access the microphone.");
       setRecordingStatus(null);
     }
   };
@@ -322,6 +516,7 @@ export default function RecordPage() {
     setIsAiLoading("preview");
     setAiErrorMessage(null);
     setAiSavedShift(null);
+    setAiChecklistConfirmed(false);
 
     try {
       const response = await fetch(`${apiBaseUrl}/api/shifts/from-text/preview`, {
@@ -336,7 +531,7 @@ export default function RecordPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await extractApiError(response));
+        throw new Error(await extractApiError(response, "Unable to analyze the report."));
       }
 
       const data: PreviewResponse = await response.json();
@@ -350,9 +545,16 @@ export default function RecordPage() {
 
   const handleAiSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!parsedPreview) {
+      setAiErrorMessage("Run Preview parse first so the checklist can validate the entry.");
+      return;
+    }
+
     setIsAiLoading("save");
     setAiErrorMessage(null);
     setAiSavedShift(null);
+    setAttachmentStatusMessage(null);
 
     try {
       const response = await fetch(`${apiBaseUrl}/api/shifts/from-text`, {
@@ -367,13 +569,20 @@ export default function RecordPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await extractApiError(response));
+        throw new Error(await extractApiError(response, "Unable to analyze and save the report."));
       }
 
-      const data: ShiftResponse = await response.json();
+      const data: SavedShiftResponse = await response.json();
+
+      if (selectedFiles.length > 0) {
+        await handleAttachmentUpload(data.id);
+      }
+
       setAiSavedShift(data);
       setParsedPreview(null);
       setDictatedText("");
+      setAiChecklistConfirmed(false);
+      resetSharedArtifacts();
     } catch (error) {
       setAiErrorMessage(error instanceof Error ? error.message : "Unable to analyze and save the report.");
     } finally {
@@ -391,15 +600,54 @@ export default function RecordPage() {
         <p className="eyebrow">Shift entry</p>
         <h1>Record Shift</h1>
         <p className="intro">
-          Save a quick end-of-shift journal entry from dictated text or by filling in the core numbers manually.
+          Save a complete shift with dictation or manual entry, check data quality before saving, and attach files for
+          evidence and handover.
         </p>
+
+        <section className="section-block">
+          <div className="section-heading-wrap">
+            <h2 className="section-heading">Attachments</h2>
+            <p className="section-text">Add photos, documents, or audio notes. They will upload right after the shift is saved.</p>
+          </div>
+
+          <label className="field">
+            <span className="field-label">Evidence files</span>
+            <input
+              type="file"
+              multiple
+              className="text-input"
+              accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.mp3,.mp4,.m4a,.ogg,.wav,.webm"
+              onChange={(event) => {
+                setSelectedFiles(Array.from(event.target.files ?? []));
+                setAttachmentStatusMessage(null);
+              }}
+            />
+          </label>
+
+          {selectedFiles.length > 0 ? (
+            <div className="list-stack">
+              {selectedFiles.map((file) => (
+                <div key={`${file.name}-${file.size}`} className="list-card">
+                  <p className="entry-title">{file.name}</p>
+                  <p className="entry-copy">{Math.round(file.size / 1024)} KB</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="section-empty">No attachments selected yet.</p>
+          )}
+
+          {attachmentStatusMessage ? <p className="inline-status">{attachmentStatusMessage}</p> : null}
+        </section>
+
+        <div className="section-divider" />
 
         <section className="section-block">
           <div className="section-heading-wrap">
             <h2 className="section-heading">Dictated shift report</h2>
             <p className="section-text">
-              Paste a free-form report in Russian, Romanian, or English, or record it with your microphone. Review
-              and edit the transcript before analyzing and saving.
+              Paste a free-form report in Russian, Romanian, or English, or record it with your microphone. Preview is
+              required before saving so the checklist can validate the parsed data.
             </p>
           </div>
 
@@ -414,12 +662,7 @@ export default function RecordPage() {
                 {isTranscribing ? "Transcribing..." : "Start recording"}
               </button>
 
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={handleStopRecording}
-                disabled={!isRecording}
-              >
+              <button type="button" className="secondary-button" onClick={handleStopRecording} disabled={!isRecording}>
                 Stop recording
               </button>
             </div>
@@ -437,6 +680,7 @@ export default function RecordPage() {
                   setParsedPreview(null);
                   setAiSavedShift(null);
                   setAiErrorMessage(null);
+                  setAiChecklistConfirmed(false);
                 }}
                 placeholder="Сегодня переработали 620 голов. CO2 ушло 170 кг. Пилоты тухли два раза..."
                 required
@@ -456,7 +700,14 @@ export default function RecordPage() {
               <button
                 type="submit"
                 className="action-button"
-                disabled={isAiLoading !== null || isRecording || isTranscribing || dictatedText.trim() === ""}
+                disabled={
+                  isAiLoading !== null ||
+                  isRecording ||
+                  isTranscribing ||
+                  dictatedText.trim() === "" ||
+                  !parsedPreview ||
+                  (aiChecklist.critical.length > 0 && !aiChecklistConfirmed)
+                }
               >
                 {isAiLoading === "save" ? "Saving..." : "Analyze and save"}
               </button>
@@ -474,6 +725,48 @@ export default function RecordPage() {
               {aiErrorMessage}
             </p>
           ) : null}
+
+          <div className="checklist-card">
+            <h3 className="section-title">AI save checklist</h3>
+            {aiChecklist.critical.length > 0 || aiChecklist.advisory.length > 0 ? (
+              <div className="preview-stack">
+                {aiChecklist.critical.length > 0 ? (
+                  <div>
+                    <p className="preview-label">Critical</p>
+                    <ul className="checklist-list">
+                      {aiChecklist.critical.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {aiChecklist.advisory.length > 0 ? (
+                  <div>
+                    <p className="preview-label">Advisory</p>
+                    <ul className="checklist-list">
+                      {aiChecklist.advisory.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="section-empty">Checklist looks good after preview.</p>
+            )}
+
+            {parsedPreview && aiChecklist.critical.length > 0 ? (
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={aiChecklistConfirmed}
+                  onChange={(event) => setAiChecklistConfirmed(event.target.checked)}
+                />
+                <span>Понимаю замечания и всё равно хочу сохранить AI-разбор.</span>
+              </label>
+            ) : null}
+          </div>
 
           {parsedPreview ? (
             <div className="preview-card" role="status">
@@ -494,7 +787,7 @@ export default function RecordPage() {
                 </div>
                 <div className="metric-item">
                   <dt>CO2 / head</dt>
-                  <dd>{formatCo2PerHead(parsedPreview.co2_per_head_g) ?? "Not calculated"}</dd>
+                  <dd>{formatCo2PerHead(parsedPreview.co2_per_head_g)}</dd>
                 </div>
                 <div className="metric-item">
                   <dt>Outside temp</dt>
@@ -550,6 +843,25 @@ export default function RecordPage() {
                     <p className="preview-copy">No maintenance events detected.</p>
                   )}
                 </div>
+
+                <div>
+                  <p className="preview-label">Handover items</p>
+                  {parsedPreview.handover_items.length > 0 ? (
+                    <div className="list-stack">
+                      {parsedPreview.handover_items.map((item, index) => (
+                        <div key={`${item.title ?? "handover"}-${index}`} className="list-card">
+                          <p className="entry-title">{item.title || "Untitled follow-up"}</p>
+                          <p className="entry-copy">{item.details || "No details."}</p>
+                          <p className="entry-copy">
+                            {item.equipment_name || "General"} · {item.priority || "normal"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="preview-copy">No handover items detected.</p>
+                  )}
+                </div>
               </div>
             </div>
           ) : null}
@@ -557,9 +869,7 @@ export default function RecordPage() {
           {aiSavedShift ? (
             <div className="status-banner status-success" role="status">
               <p className="status-title">AI shift saved successfully.</p>
-              <p className="status-copy">
-                CO2 per head: {formatCo2PerHead(aiSavedShift.co2_per_head_g) ?? "Not calculated"}
-              </p>
+              <p className="status-copy">CO2 per head: {formatCo2PerHead(aiSavedShift.co2_per_head_g)}</p>
               <Link href={`/shifts/${aiSavedShift.id}`} className="text-link status-link">
                 Open saved shift
               </Link>
@@ -572,7 +882,51 @@ export default function RecordPage() {
         <section className="section-block">
           <div className="section-heading-wrap">
             <h2 className="section-heading">Manual entry</h2>
-            <p className="section-text">Use this form when you want to enter only the main production values.</p>
+            <p className="section-text">
+              Use this form when you want to enter core numbers directly and prepare a handover for the next shift.
+            </p>
+          </div>
+
+          <div className="checklist-card">
+            <h3 className="section-title">Manual save checklist</h3>
+            {manualChecklist.critical.length > 0 || manualChecklist.advisory.length > 0 ? (
+              <div className="preview-stack">
+                {manualChecklist.critical.length > 0 ? (
+                  <div>
+                    <p className="preview-label">Critical</p>
+                    <ul className="checklist-list">
+                      {manualChecklist.critical.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {manualChecklist.advisory.length > 0 ? (
+                  <div>
+                    <p className="preview-label">Advisory</p>
+                    <ul className="checklist-list">
+                      {manualChecklist.advisory.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="section-empty">Checklist looks good for manual save.</p>
+            )}
+
+            {manualChecklist.critical.length > 0 ? (
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={manualChecklistConfirmed}
+                  onChange={(event) => setManualChecklistConfirmed(event.target.checked)}
+                />
+                <span>Понимаю замечания и всё равно хочу сохранить ручную запись.</span>
+              </label>
+            ) : null}
           </div>
 
           <form className="record-form" onSubmit={handleSubmit}>
@@ -582,7 +936,10 @@ export default function RecordPage() {
                 type="date"
                 className="text-input"
                 value={values.shiftDate}
-                onChange={(event) => setValues({ ...values, shiftDate: event.target.value })}
+                onChange={(event) => {
+                  setValues({ ...values, shiftDate: event.target.value });
+                  setManualChecklistConfirmed(false);
+                }}
                 required
               />
             </label>
@@ -596,7 +953,22 @@ export default function RecordPage() {
                 min="1"
                 step="1"
                 value={values.headsCount}
-                onChange={(event) => setValues({ ...values, headsCount: event.target.value })}
+                onChange={(event) => {
+                  setValues({ ...values, headsCount: event.target.value });
+                  setManualChecklistConfirmed(false);
+                }}
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">Work hours</span>
+              <input
+                type="number"
+                className="text-input"
+                inputMode="decimal"
+                step="0.25"
+                value={values.workHours}
+                onChange={(event) => setValues({ ...values, workHours: event.target.value })}
               />
             </label>
 
@@ -608,7 +980,10 @@ export default function RecordPage() {
                 inputMode="decimal"
                 step="0.01"
                 value={values.co2UsedKg}
-                onChange={(event) => setValues({ ...values, co2UsedKg: event.target.value })}
+                onChange={(event) => {
+                  setValues({ ...values, co2UsedKg: event.target.value });
+                  setManualChecklistConfirmed(false);
+                }}
               />
             </label>
 
@@ -632,7 +1007,10 @@ export default function RecordPage() {
                 inputMode="decimal"
                 step="0.1"
                 value={values.chillerTempC}
-                onChange={(event) => setValues({ ...values, chillerTempC: event.target.value })}
+                onChange={(event) => {
+                  setValues({ ...values, chillerTempC: event.target.value });
+                  setManualChecklistConfirmed(false);
+                }}
               />
             </label>
 
@@ -644,7 +1022,10 @@ export default function RecordPage() {
                 inputMode="decimal"
                 step="0.1"
                 value={values.meatTempC}
-                onChange={(event) => setValues({ ...values, meatTempC: event.target.value })}
+                onChange={(event) => {
+                  setValues({ ...values, meatTempC: event.target.value });
+                  setManualChecklistConfirmed(false);
+                }}
               />
             </label>
 
@@ -658,7 +1039,137 @@ export default function RecordPage() {
               />
             </label>
 
-            <button type="submit" className="action-button" disabled={isSubmitting}>
+            <div className="detail-section">
+              <div className="toolbar-row toolbar-row-spread">
+                <div>
+                  <h3 className="section-title">Handover items</h3>
+                  <p className="section-text">Capture what the next shift must check, finish, or monitor.</p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setManualHandoverItems((current) => [...current, createHandoverDraft()])}
+                >
+                  Add handover item
+                </button>
+              </div>
+
+              {manualHandoverItems.length > 0 ? (
+                <div className="list-stack">
+                  {manualHandoverItems.map((item, index) => (
+                    <div key={`handover-${index}`} className="list-card">
+                      <div className="filter-grid">
+                        <label className="field">
+                          <span className="field-label">Title</span>
+                          <input
+                            className="text-input"
+                            value={item.title}
+                            onChange={(event) => {
+                              const next = [...manualHandoverItems];
+                              next[index] = { ...item, title: event.target.value };
+                              setManualHandoverItems(next);
+                              setManualChecklistConfirmed(false);
+                            }}
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span className="field-label">Equipment</span>
+                          <input
+                            className="text-input"
+                            value={item.equipment_name}
+                            onChange={(event) => {
+                              const next = [...manualHandoverItems];
+                              next[index] = { ...item, equipment_name: event.target.value };
+                              setManualHandoverItems(next);
+                            }}
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span className="field-label">Assigned to</span>
+                          <input
+                            className="text-input"
+                            value={item.assigned_to}
+                            onChange={(event) => {
+                              const next = [...manualHandoverItems];
+                              next[index] = { ...item, assigned_to: event.target.value };
+                              setManualHandoverItems(next);
+                            }}
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span className="field-label">Due date</span>
+                          <input
+                            type="date"
+                            className="text-input"
+                            value={item.due_date}
+                            onChange={(event) => {
+                              const next = [...manualHandoverItems];
+                              next[index] = { ...item, due_date: event.target.value };
+                              setManualHandoverItems(next);
+                            }}
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span className="field-label">Priority</span>
+                          <select
+                            className="text-input"
+                            value={item.priority}
+                            onChange={(event) => {
+                              const next = [...manualHandoverItems];
+                              next[index] = { ...item, priority: event.target.value };
+                              setManualHandoverItems(next);
+                            }}
+                          >
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                            <option value="low">Low</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className="field">
+                        <span className="field-label">Details</span>
+                        <textarea
+                          className="text-input text-area"
+                          rows={3}
+                          value={item.details}
+                          onChange={(event) => {
+                            const next = [...manualHandoverItems];
+                            next[index] = { ...item, details: event.target.value };
+                            setManualHandoverItems(next);
+                            setManualChecklistConfirmed(false);
+                          }}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                          setManualHandoverItems((current) => current.filter((_, currentIndex) => currentIndex !== index));
+                          setManualChecklistConfirmed(false);
+                        }}
+                      >
+                        Remove handover item
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="section-empty">No manual handover items yet.</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="action-button"
+              disabled={isSubmitting || (manualChecklist.critical.length > 0 && !manualChecklistConfirmed)}
+            >
               {isSubmitting ? "Saving..." : "Save"}
             </button>
           </form>
@@ -673,9 +1184,10 @@ export default function RecordPage() {
         {savedShift ? (
           <div className="status-banner status-success" role="status">
             <p className="status-title">Shift saved successfully.</p>
-            <p className="status-copy">
-              CO2 per head: {formatCo2PerHead(savedShift.co2_per_head_g) ?? "Not calculated"}
-            </p>
+            <p className="status-copy">CO2 per head: {formatCo2PerHead(savedShift.co2_per_head_g)}</p>
+            <Link href={`/shifts/${savedShift.id}`} className="text-link status-link">
+              Open saved shift
+            </Link>
           </div>
         ) : null}
       </section>

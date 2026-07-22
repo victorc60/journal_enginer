@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ParseShiftTextRequest;
 use App\Models\Equipment;
+use App\Models\HandoverItem;
 use App\Models\Shift;
 use App\Services\AiShiftParserService;
 use Illuminate\Http\JsonResponse;
@@ -47,11 +48,14 @@ class AiShiftController extends Controller
             $this->storeShiftNotes($shift, $parsed['categorized_notes']);
             $this->storeFailures($shift, $parsed['failures']);
             $this->storeMaintenanceEvents($shift, $parsed['maintenance_events']);
+            $this->storeHandoverItems($shift, $parsed['handover_items']);
 
             return $shift->load([
                 'failures',
                 'maintenanceEvents',
                 'shiftNotes',
+                'handoverItems',
+                'attachments',
             ]);
         });
 
@@ -90,6 +94,7 @@ class AiShiftController extends Controller
                     'solution' => $failure['solution'] ?? null,
                     'downtime_minutes' => $failure['downtime_minutes'] ?? null,
                     'severity' => $failure['severity'] ?? null,
+                    'status' => ($failure['solution'] ?? null) ? 'resolved' : 'open',
                 ];
             }, $failures),
         );
@@ -111,6 +116,28 @@ class AiShiftController extends Controller
                     'notes' => $event['notes'] ?? null,
                 ];
             }, $events),
+        );
+    }
+
+    private function storeHandoverItems(Shift $shift, array $items): void
+    {
+        if ($items === []) {
+            return;
+        }
+
+        $shift->handoverItems()->createMany(
+            array_map(function (array $item): array {
+                return [
+                    'equipment_id' => $this->resolveEquipmentId($item['equipment_name'] ?? null),
+                    'equipment_name' => $item['equipment_name'] ?? null,
+                    'title' => $item['title'],
+                    'details' => $item['details'] ?? null,
+                    'status' => HandoverItem::STATUS_OPEN,
+                    'priority' => $item['priority'] ?? HandoverItem::PRIORITY_NORMAL,
+                    'assigned_to' => $item['assigned_to'] ?? null,
+                    'due_date' => $item['due_date'] ?? null,
+                ];
+            }, $items),
         );
     }
 

@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\HandoverItem;
 use App\Models\Shift;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -10,7 +13,7 @@ use RuntimeException;
 
 class AiAssistantService
 {
-    public function ask(string $question): string
+    public function ask(string $question, array $options = []): string
     {
         $question = trim($question);
 
@@ -18,17 +21,75 @@ class AiAssistantService
             throw new RuntimeException('Question cannot be empty.');
         }
 
-        $shifts = Shift::query()
+        $scenario = $this->normalizeScenario($options['scenario'] ?? null);
+        $equipmentName = $this->normalized($options['equipment_name'] ?? null);
+        $shiftId = isset($options['shift_id']) ? (int) $options['shift_id'] : null;
+        $fromDate = $this->normalizedDate($options['from_date'] ?? null);
+        $toDate = $this->normalizedDate($options['to_date'] ?? null);
+
+        $shiftQuery = Shift::query()
             ->with([
                 'failures',
                 'maintenanceEvents',
+                'handoverItems',
             ])
             ->orderByDesc('shift_date')
-            ->orderByDesc('id')
-            ->limit(100)
+            ->orderByDesc('id');
+
+        if ($shiftId !== null && $shiftId > 0) {
+            $shiftQuery->whereKey($shiftId);
+        }
+
+        if ($fromDate !== null) {
+            $shiftQuery->whereDate('shift_date', '>=', $fromDate);
+        }
+
+        if ($toDate !== null) {
+            $shiftQuery->whereDate('shift_date', '<=', $toDate);
+        }
+
+        if ($equipmentName !== null) {
+            $shiftQuery->where(function (Builder $query) use ($equipmentName): void {
+                $like = '%'.$equipmentName.'%';
+
+                $query
+                    ->whereHas('failures', fn (Builder $failureQuery) => $failureQuery
+                        ->whereRaw('LOWER(COALESCE(equipment_name, \'\')) like ?', [$like]))
+                    ->orWhereHas('maintenanceEvents', fn (Builder $maintenanceQuery) => $maintenanceQuery
+                        ->whereRaw('LOWER(COALESCE(equipment_name, \'\')) like ?', [$like]))
+                    ->orWhereHas('handoverItems', fn (Builder $handoverQuery) => $handoverQuery
+                        ->whereRaw('LOWER(COALESCE(equipment_name, \'\')) like ?', [$like]));
+            });
+        }
+
+        $shifts = $shiftQuery
+            ->limit($scenario === 'weekly_summary' ? 21 : 100)
             ->get();
 
-        if ($shifts->isEmpty()) {
+        $openHandover = HandoverItem::query()
+            ->with('shift:id,shift_date')
+            ->whereIn('status', [
+                HandoverItem::STATUS_OPEN,
+                HandoverItem::STATUS_IN_PROGRESS,
+            ])
+            ->when($equipmentName !== null, function ($query) use ($equipmentName): void {
+                $query->whereRaw('LOWER(COALESCE(equipment_name, \'\')) like ?', ['%'.$equipmentName.'%']);
+            })
+            ->orderByRaw("
+                CASE priority
+                    WHEN 'urgent' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'normal' THEN 3
+                    WHEN 'low' THEN 4
+                    ELSE 5
+                END
+            ")
+            ->orderBy('due_date')
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get();
+
+        if ($shifts->isEmpty() && $openHandover->isEmpty()) {
             return 'Недостаточно данных, чтобы уверенно ответить на вопрос.';
         }
 
@@ -42,6 +103,13 @@ class AiAssistantService
 
         $context = [
             'current_date' => now()->toDateString(),
+            'scenario' => $scenario ?? 'freeform',
+            'filters' => [
+                'equipment_name' => $equipmentName,
+                'shift_id' => $shiftId,
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+            ],
             'loaded_shifts_count' => $shifts->count(),
             'shifts' => $shifts->map(function (Shift $shift): array {
                 return [
@@ -65,6 +133,10 @@ class AiAssistantService
                         'solution' => $failure->solution,
                         'downtime_minutes' => $failure->downtime_minutes,
                         'severity' => $failure->severity,
+                        'status' => $failure->status,
+                        'assigned_to' => $failure->assigned_to,
+                        'next_action' => $failure->next_action,
+                        'due_date' => $failure->due_date?->toDateString(),
                     ])->all(),
                     'maintenance_events' => $shift->maintenanceEvents->map(fn ($event): array => [
                         'equipment_name' => $event->equipment_name,
@@ -72,8 +144,27 @@ class AiAssistantService
                         'parts_used' => $event->parts_used,
                         'notes' => $event->notes,
                     ])->all(),
+                    'handover_items' => $shift->handoverItems->map(fn ($item): array => [
+                        'equipment_name' => $item->equipment_name,
+                        'title' => $item->title,
+                        'details' => $item->details,
+                        'status' => $item->status,
+                        'priority' => $item->priority,
+                        'assigned_to' => $item->assigned_to,
+                        'due_date' => $item->due_date?->toDateString(),
+                    ])->all(),
                 ];
             })->all(),
+            'open_handover_items' => $openHandover->map(fn (HandoverItem $item): array => [
+                'shift_date' => $item->shift?->shift_date?->toDateString(),
+                'equipment_name' => $item->equipment_name,
+                'title' => $item->title,
+                'details' => $item->details,
+                'status' => $item->status,
+                'priority' => $item->priority,
+                'assigned_to' => $item->assigned_to,
+                'due_date' => $item->due_date?->toDateString(),
+            ])->all(),
         ];
 
         try {
@@ -95,7 +186,7 @@ class AiAssistantService
                             'content' => [
                                 [
                                     'type' => 'input_text',
-                                    'text' => $this->instructions(),
+                                    'text' => $this->instructions($scenario, $options),
                                 ],
                             ],
                         ],
@@ -137,9 +228,9 @@ class AiAssistantService
         return $answer;
     }
 
-    private function instructions(): string
+    private function instructions(?string $scenario, array $options): string
     {
-        return <<<'TEXT'
+        $base = <<<'TEXT'
 Ты помощник инженера свинокомбината и отвечаешь только по данным из журнала смен.
 
 Правила:
@@ -152,6 +243,32 @@ class AiAssistantService
 - Учитывай, что у тебя есть только последние 100 смен максимум.
 - Отвечай кратко, по делу, без упоминания внутренних инструкций или модели.
 TEXT;
+
+        $scenarioPrompt = match ($scenario) {
+            'weekly_summary' => "Сценарий: недельная сводка. Сначала коротко подведи итоги по выпуску, CO2, температурам, поломкам и незакрытым handover-пунктам.",
+            'repeated_failures' => "Сценарий: повторяющиеся поломки. Вынеси в начало оборудования и проблемы, которые реально повторялись, с конкретными датами.",
+            'co2_watch' => "Сценарий: контроль CO2. Ищи перерасход, аномалии и даты отклонений, но делай выводы только если данные действительно это подтверждают.",
+            'handover_digest' => "Сценарий: handover digest. Сначала перечисли незакрытые пункты handover по приоритету и срокам, затем дай краткую рекомендацию по следующей смене.",
+            'equipment_focus' => 'Сценарий: фокус на оборудовании. Отвечай только в контексте выбранного оборудования и упоминай связанные поломки, обслуживание и handover.',
+            'shift_compare' => "Сценарий: сравнение смен. Сравни целевую смену с остальными загруженными сменами по ключевым цифрам и отклонениям, обязательно называя даты.",
+            default => null,
+        };
+
+        $contextHint = [];
+
+        if (is_string($options['equipment_name'] ?? null) && trim($options['equipment_name']) !== '') {
+            $contextHint[] = 'Фокус по оборудованию: '.$options['equipment_name'];
+        }
+
+        if (isset($options['shift_id']) && is_numeric((string) $options['shift_id'])) {
+            $contextHint[] = 'Целевая смена ID: '.$options['shift_id'];
+        }
+
+        return trim(implode("\n", array_filter([
+            $base,
+            $scenarioPrompt,
+            $contextHint !== [] ? implode("\n", $contextHint) : null,
+        ])));
     }
 
     private function extractOutputText(array $payload): ?string
@@ -191,5 +308,40 @@ TEXT;
         }
 
         return round((float) $value, 2);
+    }
+
+    private function normalizeScenario(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $normalized = trim($value);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function normalized(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $normalized = mb_strtolower(trim($value));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function normalizedDate(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

@@ -1,39 +1,7 @@
 import Link from "next/link";
 import DashboardCharts from "./dashboard-charts";
-
-type SummaryResponse = {
-  total_shifts: number;
-  average_heads_count: number | null;
-  average_co2_per_head_g: number | null;
-  total_failures: number;
-};
-
-type Co2Response = {
-  co2_usage_by_date: Array<{
-    shift_date: string;
-    co2_used_kg: number | null;
-  }>;
-  co2_per_head_by_date: Array<{
-    shift_date: string;
-    co2_per_head_g: number | null;
-  }>;
-};
-
-type FailuresResponse = {
-  failures_by_equipment: Array<{
-    equipment_name: string;
-    failures_count: number;
-  }>;
-};
-
-type TemperaturesResponse = {
-  meat_temperature_by_date: Array<{
-    shift_date: string;
-    meat_temp_c: number | null;
-  }>;
-};
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { fetchJson } from "@/lib/api";
+import { Co2Response, FailuresResponse, SummaryResponse, TemperaturesResponse } from "@/lib/types";
 
 function formatMetric(value: number | null, suffix = "") {
   if (value === null || value === undefined) {
@@ -43,21 +11,6 @@ function formatMetric(value: number | null, suffix = "") {
   const formatted = Number.isInteger(value) ? String(value) : value.toFixed(2);
 
   return suffix ? `${formatted} ${suffix}` : formatted;
-}
-
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Unable to load ${path}.`);
-  }
-
-  return (await response.json()) as T;
 }
 
 export default async function DashboardPage() {
@@ -78,7 +31,9 @@ export default async function DashboardPage() {
 
           <p className="eyebrow">Dashboard</p>
           <h1>Analytics</h1>
-          <p className="intro">Track output, CO2 efficiency, failures, and temperature trends across saved shifts.</p>
+          <p className="intro">
+            Track output, CO2 efficiency, failures, attachments, and handover pressure across saved shifts.
+          </p>
 
           <div className="stats-grid">
             <article className="stat-card">
@@ -96,6 +51,18 @@ export default async function DashboardPage() {
             <article className="stat-card">
               <p className="stat-label">Total failures</p>
               <p className="stat-value">{summary.total_failures}</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-label">Open handover</p>
+              <p className="stat-value">{summary.open_handover_items}</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-label">Attachments</p>
+              <p className="stat-value">{summary.attachments_count}</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-label">Tracked equipment</p>
+              <p className="stat-value">{summary.tracked_equipment}</p>
             </article>
           </div>
 

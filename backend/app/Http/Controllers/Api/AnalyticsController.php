@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Equipment;
 use App\Models\Failure;
+use App\Models\HandoverItem;
 use App\Models\Shift;
+use App\Models\ShiftAttachment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -23,6 +26,11 @@ class AnalyticsController extends Controller
             'average_heads_count' => $this->roundNullable($summary?->average_heads_count),
             'average_co2_per_head_g' => $this->roundNullable($summary?->average_co2_per_head_g),
             'total_failures' => Failure::query()->count(),
+            'open_handover_items' => HandoverItem::query()
+                ->whereIn('status', [HandoverItem::STATUS_OPEN, HandoverItem::STATUS_IN_PROGRESS])
+                ->count(),
+            'attachments_count' => ShiftAttachment::query()->count(),
+            'tracked_equipment' => Equipment::query()->count(),
         ]);
     }
 

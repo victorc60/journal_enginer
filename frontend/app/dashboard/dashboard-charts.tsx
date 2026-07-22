@@ -33,6 +33,17 @@ type DashboardChartsProps = {
   failuresByEquipment: FailurePoint[];
 };
 
+const chartTheme = {
+  grid: "#d5dfef",
+  axis: "#7a8ea8",
+  tooltipBorder: "#cad7ea",
+  tooltipBackground: "#ffffff",
+  tooltipText: "#17304e",
+  primary: "#2c68d8",
+  secondary: "#4fa4d6",
+  tertiary: "#7ea8ff",
+} as const;
+
 function formatDateLabel(value: string) {
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
@@ -61,16 +72,16 @@ export default function DashboardCharts({
           {co2PerHeadByDate.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={co2PerHeadByDate} margin={{ top: 8, right: 8, left: -16, bottom: 8 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" />
                 <XAxis
                   dataKey="shift_date"
                   tickFormatter={formatDateLabel}
-                  stroke="rgba(202, 191, 174, 0.8)"
+                  stroke={chartTheme.axis}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  stroke="rgba(202, 191, 174, 0.8)"
+                  stroke={chartTheme.axis}
                   tickLine={false}
                   axisLine={false}
                   width={48}
@@ -80,17 +91,18 @@ export default function DashboardCharts({
                   formatter={(value) => [`${Number(value).toFixed(2)} g`, "CO2 / head"]}
                   contentStyle={{
                     borderRadius: "12px",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(18, 26, 32, 0.96)",
-                    color: "#f5f2eb",
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    background: chartTheme.tooltipBackground,
+                    color: chartTheme.tooltipText,
+                    boxShadow: "0 18px 40px rgba(61, 95, 148, 0.14)",
                   }}
                 />
                 <Line
                   type="monotone"
                   dataKey="co2_per_head_g"
-                  stroke="#d46a2e"
+                  stroke={chartTheme.primary}
                   strokeWidth={3}
-                  dot={{ r: 3, fill: "#d46a2e" }}
+                  dot={{ r: 3, fill: chartTheme.primary }}
                   activeDot={{ r: 5 }}
                 />
               </LineChart>
@@ -111,16 +123,16 @@ export default function DashboardCharts({
           {meatTemperatureByDate.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={meatTemperatureByDate} margin={{ top: 8, right: 8, left: -16, bottom: 8 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" />
                 <XAxis
                   dataKey="shift_date"
                   tickFormatter={formatDateLabel}
-                  stroke="rgba(202, 191, 174, 0.8)"
+                  stroke={chartTheme.axis}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  stroke="rgba(202, 191, 174, 0.8)"
+                  stroke={chartTheme.axis}
                   tickLine={false}
                   axisLine={false}
                   width={48}
@@ -130,17 +142,18 @@ export default function DashboardCharts({
                   formatter={(value) => [`${Number(value).toFixed(2)} °C`, "Meat temperature"]}
                   contentStyle={{
                     borderRadius: "12px",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(18, 26, 32, 0.96)",
-                    color: "#f5f2eb",
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    background: chartTheme.tooltipBackground,
+                    color: chartTheme.tooltipText,
+                    boxShadow: "0 18px 40px rgba(61, 95, 148, 0.14)",
                   }}
                 />
                 <Line
                   type="monotone"
                   dataKey="meat_temp_c"
-                  stroke="#7dc0b0"
+                  stroke={chartTheme.secondary}
                   strokeWidth={3}
-                  dot={{ r: 3, fill: "#7dc0b0" }}
+                  dot={{ r: 3, fill: chartTheme.secondary }}
                   activeDot={{ r: 5 }}
                 />
               </LineChart>
@@ -161,10 +174,10 @@ export default function DashboardCharts({
           {failuresByEquipment.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={failuresByEquipment} margin={{ top: 8, right: 8, left: -16, bottom: 48 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" />
                 <XAxis
                   dataKey="equipment_name"
-                  stroke="rgba(202, 191, 174, 0.8)"
+                  stroke={chartTheme.axis}
                   tickLine={false}
                   axisLine={false}
                   interval={0}
@@ -174,7 +187,7 @@ export default function DashboardCharts({
                 />
                 <YAxis
                   allowDecimals={false}
-                  stroke="rgba(202, 191, 174, 0.8)"
+                  stroke={chartTheme.axis}
                   tickLine={false}
                   axisLine={false}
                   width={40}
@@ -183,12 +196,13 @@ export default function DashboardCharts({
                   formatter={(value) => [Number(value), "Failures"]}
                   contentStyle={{
                     borderRadius: "12px",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(18, 26, 32, 0.96)",
-                    color: "#f5f2eb",
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    background: chartTheme.tooltipBackground,
+                    color: chartTheme.tooltipText,
+                    boxShadow: "0 18px 40px rgba(61, 95, 148, 0.14)",
                   }}
                 />
-                <Bar dataKey="failures_count" fill="#e3b35d" radius={[10, 10, 0, 0]} />
+                <Bar dataKey="failures_count" fill={chartTheme.tertiary} radius={[10, 10, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

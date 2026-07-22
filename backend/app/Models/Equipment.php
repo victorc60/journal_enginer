@@ -29,4 +29,9 @@ class Equipment extends Model
     {
         return $this->hasMany(MaintenanceEvent::class);
     }
+
+    public function handoverItems(): HasMany
+    {
+        return $this->hasMany(HandoverItem::class);
+    }
 }

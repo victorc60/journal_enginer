@@ -55,4 +55,14 @@ class Shift extends Model
     {
         return $this->hasMany(ShiftNote::class);
     }
+
+    public function handoverItems(): HasMany
+    {
+        return $this->hasMany(HandoverItem::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ShiftAttachment::class);
+    }
 }

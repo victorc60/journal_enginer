@@ -1,66 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
-type Failure = {
-  id: number;
-  equipment_id: number | null;
-  equipment_name: string | null;
-  problem: string;
-  cause: string | null;
-  solution: string | null;
-  downtime_minutes: number | null;
-  severity: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type MaintenanceEvent = {
-  id: number;
-  equipment_id: number | null;
-  equipment_name: string | null;
-  action: string;
-  parts_used: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type ShiftNote = {
-  id: number;
-  category: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-};
-
-type ShiftDetail = {
-  id: number;
-  shift_date: string;
-  heads_count: number | null;
-  work_hours: string | number | null;
-  co2_start_kg: string | number | null;
-  co2_end_kg: string | number | null;
-  co2_used_kg: string | number | null;
-  co2_per_head_g: string | number | null;
-  outside_temp_c: string | number | null;
-  chiller_temp_c: string | number | null;
-  meat_temp_c: string | number | null;
-  raw_text: string;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-  failures: Failure[];
-  maintenance_events: MaintenanceEvent[];
-  shift_notes: ShiftNote[];
-};
+import { fetchJson } from "@/lib/api";
+import { formatDate, formatDateTime, formatFileSize, formatPlainValue } from "@/lib/format";
+import { ShiftDetail, ShiftNote } from "@/lib/types";
 
 type ShiftDetailPageProps = {
   params: Promise<{
     id: string;
   }>;
 };
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 const noteSections = [
   { key: "production", title: "Production" },
@@ -72,59 +20,24 @@ const noteSections = [
   { key: "general_notes", title: "General notes" },
 ] as const;
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatValue(value: string | number | null, suffix?: string) {
-  if (value === null || value === undefined || value === "") {
-    return "—";
-  }
-
-  if (typeof value === "number") {
-    return suffix ? `${value} ${suffix}` : String(value);
-  }
-
-  const numericValue = Number(value);
-
-  if (!Number.isNaN(numericValue) && suffix) {
-    return `${numericValue.toFixed(2)} ${suffix}`;
-  }
-
-  return value;
-}
-
 async function getShift(id: string) {
-  const response = await fetch(`${apiBaseUrl}/api/shifts/${id}`, {
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  try {
+    return await fetchJson<ShiftDetail>(`/api/shifts/${id}`);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) {
+      notFound();
+    }
 
-  if (response.status === 404) {
-    notFound();
+    throw error;
   }
+}
 
-  if (!response.ok) {
-    throw new Error("Unable to load shift details.");
-  }
+function getPriorityClass(priority: string) {
+  return `tag-pill tag-pill-${priority || "normal"}`;
+}
 
-  return (await response.json()) as ShiftDetail;
+function getStatusClass(status: string) {
+  return `tag-pill tag-pill-${status || "open"}`;
 }
 
 export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) {
@@ -132,7 +45,6 @@ export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) 
 
   try {
     const shift = await getShift(id);
-
     const notesByCategory = new Map<string, ShiftNote[]>();
 
     for (const note of shift.shift_notes) {
@@ -150,7 +62,9 @@ export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) 
 
           <p className="eyebrow">Shift detail</p>
           <h1>{formatDate(shift.shift_date)}</h1>
-          <p className="intro">Full production entry with temperatures, notes, failures, and maintenance.</p>
+          <p className="intro">
+            Full production entry with handover, attachments, temperatures, failures, and maintenance history.
+          </p>
 
           <div className="detail-stack">
             <section className="detail-section">
@@ -166,39 +80,39 @@ export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) 
                 </div>
                 <div className="detail-row">
                   <dt>Heads count</dt>
-                  <dd>{formatValue(shift.heads_count)}</dd>
+                  <dd>{formatPlainValue(shift.heads_count)}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>Work hours</dt>
-                  <dd>{formatValue(shift.work_hours, "hours")}</dd>
+                  <dd>{formatPlainValue(shift.work_hours, "hours")}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>CO2 start</dt>
-                  <dd>{formatValue(shift.co2_start_kg, "kg")}</dd>
+                  <dd>{formatPlainValue(shift.co2_start_kg, "kg")}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>CO2 end</dt>
-                  <dd>{formatValue(shift.co2_end_kg, "kg")}</dd>
+                  <dd>{formatPlainValue(shift.co2_end_kg, "kg")}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>CO2 used</dt>
-                  <dd>{formatValue(shift.co2_used_kg, "kg")}</dd>
+                  <dd>{formatPlainValue(shift.co2_used_kg, "kg")}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>CO2 per head</dt>
-                  <dd>{formatValue(shift.co2_per_head_g, "g")}</dd>
+                  <dd>{formatPlainValue(shift.co2_per_head_g, "g")}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>Outside temp</dt>
-                  <dd>{formatValue(shift.outside_temp_c, "°C")}</dd>
+                  <dd>{formatPlainValue(shift.outside_temp_c, "°C")}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>Chiller temp</dt>
-                  <dd>{formatValue(shift.chiller_temp_c, "°C")}</dd>
+                  <dd>{formatPlainValue(shift.chiller_temp_c, "°C")}</dd>
                 </div>
                 <div className="detail-row">
                   <dt>Meat temp</dt>
-                  <dd>{formatValue(shift.meat_temp_c, "°C")}</dd>
+                  <dd>{formatPlainValue(shift.meat_temp_c, "°C")}</dd>
                 </div>
                 <div className="detail-row detail-row-wide">
                   <dt>Raw text</dt>
@@ -217,6 +131,65 @@ export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) 
                   <dd>{formatDateTime(shift.updated_at)}</dd>
                 </div>
               </dl>
+            </section>
+
+            <section className="detail-section">
+              <h2 className="section-title">Handover items</h2>
+              {shift.handover_items.length > 0 ? (
+                <div className="list-stack">
+                  {shift.handover_items.map((item) => (
+                    <article key={item.id} className="list-card">
+                      <div className="tag-row">
+                        <span className={getPriorityClass(item.priority)}>{item.priority}</span>
+                        <span className={getStatusClass(item.status)}>{item.status}</span>
+                      </div>
+                      <p className="entry-title">{item.title}</p>
+                      <p className="entry-copy">{item.details || "No details."}</p>
+                      <p className="entry-copy">
+                        <strong>Equipment:</strong>{" "}
+                        {item.equipment_id ? <Link href={`/equipment/${item.equipment_id}`}>{item.equipment_name}</Link> : item.equipment_name || "—"}
+                      </p>
+                      <p className="entry-copy">
+                        <strong>Assigned:</strong> {item.assigned_to || "—"}
+                      </p>
+                      <p className="entry-copy">
+                        <strong>Due:</strong> {item.due_date ? formatDate(item.due_date) : "—"}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="section-empty">No handover items recorded for this shift.</p>
+              )}
+            </section>
+
+            <section className="detail-section">
+              <h2 className="section-title">Attachments</h2>
+              {shift.attachments.length > 0 ? (
+                <div className="list-stack">
+                  {shift.attachments.map((attachment) => (
+                    <article key={attachment.id} className="list-card">
+                      <p className="entry-title">{attachment.original_name}</p>
+                      <p className="entry-copy">
+                        <strong>Type:</strong> {attachment.attachment_type}
+                      </p>
+                      <p className="entry-copy">
+                        <strong>Size:</strong> {formatFileSize(attachment.size_bytes)}
+                      </p>
+                      {attachment.caption ? (
+                        <p className="entry-copy">
+                          <strong>Caption:</strong> {attachment.caption}
+                        </p>
+                      ) : null}
+                      <a href={attachment.download_url} className="text-link">
+                        Download
+                      </a>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="section-empty">No attachments saved for this shift.</p>
+              )}
             </section>
 
             {noteSections.map((section) => {
@@ -248,7 +221,11 @@ export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) 
                       {shift.failures.map((failure) => (
                         <article key={failure.id} className="entry-item">
                           <p className="entry-title">
-                            {failure.equipment_name || "General equipment issue"}
+                            {failure.equipment_id ? (
+                              <Link href={`/equipment/${failure.equipment_id}`}>{failure.equipment_name || "Equipment issue"}</Link>
+                            ) : (
+                              failure.equipment_name || "General equipment issue"
+                            )}
                             {failure.severity ? ` · ${failure.severity}` : ""}
                           </p>
                           <p className="entry-copy">
@@ -259,6 +236,9 @@ export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) 
                           </p>
                           <p className="entry-copy">
                             <strong>Solution:</strong> {failure.solution || "—"}
+                          </p>
+                          <p className="entry-copy">
+                            <strong>Status:</strong> {failure.status || "—"}
                           </p>
                           <p className="entry-copy">
                             <strong>Downtime:</strong>{" "}
@@ -273,7 +253,13 @@ export default async function ShiftDetailPage({ params }: ShiftDetailPageProps) 
                     <div className="entry-list structured-list">
                       {shift.maintenance_events.map((event) => (
                         <article key={event.id} className="entry-item">
-                          <p className="entry-title">{event.equipment_name || "General maintenance"}</p>
+                          <p className="entry-title">
+                            {event.equipment_id ? (
+                              <Link href={`/equipment/${event.equipment_id}`}>{event.equipment_name || "Maintenance item"}</Link>
+                            ) : (
+                              event.equipment_name || "General maintenance"
+                            )}
+                          </p>
                           <p className="entry-copy">
                             <strong>Action:</strong> {event.action}
                           </p>

@@ -19,6 +19,12 @@ class Failure extends Model
         'solution',
         'downtime_minutes',
         'severity',
+        'status',
+        'assigned_to',
+        'parts_needed',
+        'next_action',
+        'due_date',
+        'resolved_at',
     ];
 
     protected function casts(): array
@@ -27,6 +33,8 @@ class Failure extends Model
             'shift_id' => 'integer',
             'equipment_id' => 'integer',
             'downtime_minutes' => 'integer',
+            'due_date' => 'date',
+            'resolved_at' => 'datetime',
         ];
     }
 

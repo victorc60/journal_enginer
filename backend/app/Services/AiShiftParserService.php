@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\HandoverItem;
 use App\Models\ShiftNote;
+use Carbon\Carbon;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use JsonException;
@@ -130,6 +132,7 @@ class AiShiftParserService
             'notes' => $this->normalizeString($data['notes'] ?? null),
             'failures' => $this->normalizeFailures($data['failures'] ?? []),
             'maintenance_events' => $this->normalizeMaintenanceEvents($data['maintenance_events'] ?? []),
+            'handover_items' => $this->normalizeHandoverItems($data['handover_items'] ?? []),
             'categorized_notes' => $this->normalizeCategorizedNotes($data['categorized_notes'] ?? []),
         ];
 
@@ -203,6 +206,43 @@ class AiShiftParserService
         return $normalized;
     }
 
+    private function normalizeHandoverItems(mixed $items): array
+    {
+        if (! is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $title = $this->normalizeString($item['title'] ?? null);
+            $details = $this->normalizeString($item['details'] ?? null);
+
+            if ($title === null && $details !== null) {
+                $title = $details;
+            }
+
+            if ($title === null) {
+                continue;
+            }
+
+            $normalized[] = [
+                'equipment_name' => $this->normalizeString($item['equipment_name'] ?? null),
+                'title' => mb_substr($title, 0, 160),
+                'details' => $details,
+                'assigned_to' => $this->normalizeString($item['assigned_to'] ?? null),
+                'due_date' => $this->normalizeDate($item['due_date'] ?? null),
+                'priority' => $this->normalizePriority($item['priority'] ?? null),
+            ];
+        }
+
+        return $normalized;
+    }
+
     private function normalizeCategorizedNotes(mixed $notes): array
     {
         if (! is_array($notes)) {
@@ -248,7 +288,7 @@ class AiShiftParserService
         }
 
         try {
-            return \Carbon\Carbon::parse($value)->toDateString();
+            return Carbon::parse($value)->toDateString();
         } catch (\Throwable) {
             return null;
         }
@@ -302,6 +342,17 @@ class AiShiftParserService
         return in_array($normalized, ShiftNote::CATEGORIES, true) ? $normalized : null;
     }
 
+    private function normalizePriority(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $normalized = trim($value);
+
+        return in_array($normalized, HandoverItem::PRIORITIES, true) ? $normalized : null;
+    }
+
     private function instructions(): string
     {
         return <<<'TEXT'
@@ -317,6 +368,8 @@ Rules:
 - Use YYYY-MM-DD only when a date is clearly stated in the text; otherwise return null.
 - Capture temperatures and CO2 values only when clearly stated.
 - Put extra qualitative context into notes only when useful and grounded in the text.
+- Extract unresolved follow-up actions for the next shift into handover_items.
+- Handover items should describe what remains to watch, fix, verify, or pass on.
 - Also extract categorized notes as short factual statements grouped into these categories only:
   production, co2, temperatures, failures, maintenance, ideas, general_notes.
 - Categorized notes may overlap with structured fields when that helps preserve the original report context.
@@ -342,6 +395,32 @@ TEXT;
                 'chiller_temp_c' => $this->nullableNumberSchema(),
                 'meat_temp_c' => $this->nullableNumberSchema(),
                 'notes' => $this->nullableStringSchema(),
+                'handover_items' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => [
+                            'equipment_name' => $this->nullableStringSchema(),
+                            'title' => $this->nullableStringSchema(),
+                            'details' => $this->nullableStringSchema(),
+                            'assigned_to' => $this->nullableStringSchema(),
+                            'due_date' => $this->nullableStringSchema(),
+                            'priority' => [
+                                'type' => ['string', 'null'],
+                                'enum' => array_merge(HandoverItem::PRIORITIES, [null]),
+                            ],
+                        ],
+                        'required' => [
+                            'equipment_name',
+                            'title',
+                            'details',
+                            'assigned_to',
+                            'due_date',
+                            'priority',
+                        ],
+                    ],
+                ],
                 'categorized_notes' => [
                     'type' => 'array',
                     'items' => [
@@ -416,6 +495,7 @@ TEXT;
                 'chiller_temp_c',
                 'meat_temp_c',
                 'notes',
+                'handover_items',
                 'categorized_notes',
                 'failures',
                 'maintenance_events',

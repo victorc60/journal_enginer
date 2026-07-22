@@ -2,34 +2,66 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { apiBaseUrl, extractApiError } from "@/lib/api";
 
 type ChatEntry = {
   id: number;
   question: string;
   answer: string;
+  scenario: string;
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
-const exampleQuestions = [
-  "Какой средний расход CO2 за последний месяц?",
-  "Когда последний раз тухли пилоты?",
-  "Какие поломки повторяются чаще всего?",
-  "Была ли связь между температурой мяса и настройкой холодильника?",
+const quickScenarios = [
+  {
+    id: "weekly_summary",
+    label: "Weekly summary",
+    description: "Сводка по выпуску, CO2, поломкам и handover за выбранный период.",
+    question: "Сделай недельную сводку по журналу.",
+  },
+  {
+    id: "repeated_failures",
+    label: "Repeated failures",
+    description: "Повторяющиеся поломки с датами и приоритетом внимания.",
+    question: "Какие поломки повторяются чаще всего?",
+  },
+  {
+    id: "co2_watch",
+    label: "CO2 watch",
+    description: "Подсветка перерасхода и аномалий CO2 по сменам.",
+    question: "Есть ли признаки перерасхода CO2 и на каких датах?",
+  },
+  {
+    id: "handover_digest",
+    label: "Handover digest",
+    description: "Список незакрытых handover-пунктов и что важно для следующей смены.",
+    question: "Собери digest по незакрытым handover-пунктам.",
+  },
+  {
+    id: "equipment_focus",
+    label: "Equipment focus",
+    description: "Фокус только на выбранном оборудовании.",
+    question: "Что важно знать по выбранному оборудованию?",
+  },
+  {
+    id: "shift_compare",
+    label: "Compare shift",
+    description: "Сравнение целевой смены с остальными загруженными сменами.",
+    question: "Сравни выбранную смену с остальными загруженными сменами.",
+  },
 ] as const;
 
-async function extractApiError(response: Response) {
-  try {
-    const data = (await response.json()) as { message?: string };
-    return data.message ?? "Не удалось получить ответ.";
-  } catch {
-    return "Не удалось получить ответ.";
-  }
+function getScenarioLabel(value: string) {
+  return quickScenarios.find((item) => item.id === value)?.label ?? "Freeform";
 }
 
 export default function ChatPage() {
   const [question, setQuestion] = useState("");
   const [entries, setEntries] = useState<ChatEntry[]>([]);
+  const [scenario, setScenario] = useState("freeform");
+  const [equipmentName, setEquipmentName] = useState("");
+  const [shiftId, setShiftId] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -54,11 +86,16 @@ export default function ChatPage() {
         },
         body: JSON.stringify({
           question: trimmedQuestion,
+          scenario,
+          equipment_name: equipmentName.trim() || undefined,
+          shift_id: shiftId.trim() === "" ? undefined : Number(shiftId),
+          from_date: fromDate || undefined,
+          to_date: toDate || undefined,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(await extractApiError(response));
+        throw new Error(await extractApiError(response, "Не удалось получить ответ."));
       }
 
       const data = (await response.json()) as { answer: string };
@@ -68,6 +105,7 @@ export default function ChatPage() {
           id: Date.now(),
           question: trimmedQuestion,
           answer: data.answer,
+          scenario,
         },
         ...current,
       ]);
@@ -89,29 +127,90 @@ export default function ChatPage() {
         <p className="eyebrow">AI assistant</p>
         <h1>Chat</h1>
         <p className="intro">
-          Задавайте вопросы по сохраненным сменам. Для MVP ассистент опирается только на последние 100 смен.
+          Используйте готовые сценарии: недельная сводка, handover digest, повторяющиеся поломки и фокус по
+          оборудованию.
         </p>
 
         <section className="section-block">
           <div className="section-heading-wrap">
-            <h2 className="section-heading">Example questions</h2>
-            <p className="section-text">Нажмите на пример, чтобы быстро подставить вопрос.</p>
+            <h2 className="section-heading">Quick scenarios</h2>
+            <p className="section-text">Выберите сценарий, чтобы быстро собрать нужный тип ответа.</p>
           </div>
 
           <div className="example-grid">
-            {exampleQuestions.map((item) => (
+            {quickScenarios.map((item) => (
               <button
-                key={item}
+                key={item.id}
                 type="button"
                 className="example-chip"
                 onClick={() => {
-                  setQuestion(item);
+                  setScenario(item.id);
+                  setQuestion(item.question);
                   setErrorMessage(null);
                 }}
               >
-                {item}
+                <strong>{item.label}</strong>
+                <span>{item.description}</span>
               </button>
             ))}
+          </div>
+
+          <div className="toolbar-row">
+            <span className="tag-pill">{getScenarioLabel(scenario)}</span>
+            {scenario !== "freeform" ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setScenario("freeform");
+                  setQuestion("");
+                }}
+              >
+                Reset scenario
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <div className="section-divider" />
+
+        <section className="section-block">
+          <div className="section-heading-wrap">
+            <h2 className="section-heading">Context filters</h2>
+            <p className="section-text">Необязательный контекст помогает AI отвечать прицельно и коротко.</p>
+          </div>
+
+          <div className="filter-grid">
+            <label className="field">
+              <span className="field-label">Equipment</span>
+              <input
+                className="text-input"
+                value={equipmentName}
+                onChange={(event) => setEquipmentName(event.target.value)}
+                placeholder="pilots, pumps..."
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">Shift ID</span>
+              <input
+                className="text-input"
+                inputMode="numeric"
+                value={shiftId}
+                onChange={(event) => setShiftId(event.target.value)}
+                placeholder="42"
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">From date</span>
+              <input type="date" className="text-input" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+            </label>
+
+            <label className="field">
+              <span className="field-label">To date</span>
+              <input type="date" className="text-input" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+            </label>
           </div>
         </section>
 
@@ -121,7 +220,7 @@ export default function ChatPage() {
           <div className="section-heading-wrap">
             <h2 className="section-heading">Ask a question</h2>
             <p className="section-text">
-              Ассистент отвечает только по данным журнала и сообщает, если информации недостаточно.
+              Ассистент отвечает только по данным журнала и называет точные даты, если находит подтверждение.
             </p>
           </div>
 
@@ -165,6 +264,7 @@ export default function ChatPage() {
                   <div className="chat-bubble chat-bubble-user">
                     <p className="chat-role">You</p>
                     <p className="chat-copy">{entry.question}</p>
+                    <p className="section-text">{getScenarioLabel(entry.scenario)}</p>
                   </div>
                   <div className="chat-bubble chat-bubble-assistant">
                     <p className="chat-role">Assistant</p>
@@ -175,7 +275,7 @@ export default function ChatPage() {
             ) : (
               <div className="empty-state">
                 <p className="status-title">Пока нет ответов.</p>
-                <p className="status-copy">Задайте вопрос по сохраненным сменам, поломкам или температурам.</p>
+                <p className="status-copy">Запустите готовый сценарий или задайте свой вопрос по данным журнала.</p>
               </div>
             )}
           </div>

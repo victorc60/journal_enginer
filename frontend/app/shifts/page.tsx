@@ -1,50 +1,43 @@
 import Link from "next/link";
+import { apiBaseUrl, buildQuery, fetchJson } from "@/lib/api";
+import { formatDate, formatMetric } from "@/lib/format";
+import { ShiftListItem } from "@/lib/types";
 
-type ShiftListItem = {
-  id: number;
-  shift_date: string;
-  heads_count: number | null;
-  co2_used_kg: string | number | null;
-  co2_per_head_g: string | number | null;
-  meat_temp_c: string | number | null;
-};
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+function getSingleValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-function formatMetric(value: string | number | null, suffix: string) {
-  if (value === null || value === undefined || value === "") {
-    return "—";
-  }
-
-  return `${Number(value).toFixed(2)} ${suffix}`;
+function getExportUrl(searchParams: Record<string, string | string[] | undefined>) {
+  return `${apiBaseUrl}/api/shifts/export${buildQuery({
+    q: getSingleValue(searchParams.q),
+    from: getSingleValue(searchParams.from),
+    to: getSingleValue(searchParams.to),
+    equipment: getSingleValue(searchParams.equipment),
+    has_failures: getSingleValue(searchParams.has_failures),
+    has_open_handover: getSingleValue(searchParams.has_open_handover),
+  })}`;
 }
 
-async function getShifts() {
-  const response = await fetch(`${apiBaseUrl}/api/shifts`, {
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to load shifts.");
-  }
-
-  return (await response.json()) as ShiftListItem[];
+async function getShifts(searchParams: Record<string, string | string[] | undefined>) {
+  return fetchJson<ShiftListItem[]>(
+    `/api/shifts${buildQuery({
+      q: getSingleValue(searchParams.q),
+      from: getSingleValue(searchParams.from),
+      to: getSingleValue(searchParams.to),
+      equipment: getSingleValue(searchParams.equipment),
+      has_failures: getSingleValue(searchParams.has_failures),
+      has_open_handover: getSingleValue(searchParams.has_open_handover),
+    })}`,
+  );
 }
 
-export default async function ShiftsPage() {
+export default async function ShiftsPage({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+
   try {
-    const shifts = await getShifts();
+    const shifts = await getShifts(params);
 
     return (
       <main className="page-shell page-shell-top">
@@ -55,7 +48,70 @@ export default async function ShiftsPage() {
 
           <p className="eyebrow">Shift history</p>
           <h1>Shifts</h1>
-          <p className="intro">Review recent production entries and open a full shift record.</p>
+          <p className="intro">Search shifts, filter by equipment or incidents, and export the result set to CSV.</p>
+
+          <form method="GET" className="detail-section">
+            <div className="filter-grid">
+              <label className="field">
+                <span className="field-label">Search</span>
+                <input name="q" defaultValue={getSingleValue(params.q)} className="text-input" placeholder="pilot, CO2, Marel..." />
+              </label>
+
+              <label className="field">
+                <span className="field-label">From</span>
+                <input name="from" type="date" defaultValue={getSingleValue(params.from)} className="text-input" />
+              </label>
+
+              <label className="field">
+                <span className="field-label">To</span>
+                <input name="to" type="date" defaultValue={getSingleValue(params.to)} className="text-input" />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Equipment</span>
+                <input
+                  name="equipment"
+                  defaultValue={getSingleValue(params.equipment)}
+                  className="text-input"
+                  placeholder="pumps, pilots..."
+                />
+              </label>
+            </div>
+
+            <div className="toolbar-row">
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  name="has_failures"
+                  value="true"
+                  defaultChecked={getSingleValue(params.has_failures) === "true"}
+                />
+                <span>Only shifts with failures</span>
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  name="has_open_handover"
+                  value="true"
+                  defaultChecked={getSingleValue(params.has_open_handover) === "true"}
+                />
+                <span>Only shifts with open handover</span>
+              </label>
+            </div>
+
+            <div className="button-row">
+              <button type="submit" className="action-button">
+                Apply filters
+              </button>
+              <Link href="/shifts" className="secondary-button">
+                Reset
+              </Link>
+              <a href={getExportUrl(params)} className="secondary-button">
+                Export CSV
+              </a>
+            </div>
+          </form>
 
           <div className="history-list">
             {shifts.length > 0 ? (
@@ -89,13 +145,21 @@ export default async function ShiftsPage() {
                       <dt>Meat temp</dt>
                       <dd>{formatMetric(shift.meat_temp_c, "°C")}</dd>
                     </div>
+                    <div className="metric-item">
+                      <dt>Failures</dt>
+                      <dd>{shift.failures_count ?? 0}</dd>
+                    </div>
+                    <div className="metric-item">
+                      <dt>Open handover</dt>
+                      <dd>{shift.open_handover_items_count ?? 0}</dd>
+                    </div>
                   </dl>
                 </article>
               ))
             ) : (
               <div className="empty-state">
-                <p className="status-title">No shifts recorded yet.</p>
-                <p className="status-copy">Use Record shift to save the first journal entry.</p>
+                <p className="status-title">No shifts match these filters.</p>
+                <p className="status-copy">Try clearing a filter or record the next shift.</p>
               </div>
             )}
           </div>
