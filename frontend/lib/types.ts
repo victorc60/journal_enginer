@@ -115,7 +115,13 @@ export type EquipmentListItem = {
   id: number;
   name: string;
   category: string | null;
+  configuration: string | null;
   notes: string | null;
+  service_points?: string[] | null;
+  common_issues?: Array<{
+    problem: string;
+    action: string;
+  }> | null;
   failures_count: number;
   maintenance_events_count: number;
   open_handover_items_count: number;
@@ -126,7 +132,13 @@ export type EquipmentDetailResponse = {
     id: number;
     name: string;
     category: string | null;
+    configuration: string | null;
     notes: string | null;
+    service_points: string[] | null;
+    common_issues: Array<{
+      problem: string;
+      action: string;
+    }> | null;
     failures: Failure[];
     maintenance_events: MaintenanceEvent[];
     handover_items: HandoverItem[];
@@ -134,16 +146,8 @@ export type EquipmentDetailResponse = {
   summary: {
     failures_count: number;
     maintenance_count: number;
+    work_history_count: number;
     open_handover_items_count: number;
-    total_downtime_minutes: number;
-    top_repeated_problems: Array<{
-      problem: string;
-      count: number;
-    }>;
-    recent_parts_used: Array<{
-      parts_used: string;
-      count: number;
-    }>;
   };
 };
 

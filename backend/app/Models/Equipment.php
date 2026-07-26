@@ -17,8 +17,19 @@ class Equipment extends Model
     protected $fillable = [
         'name',
         'category',
+        'configuration',
         'notes',
+        'service_points',
+        'common_issues',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'service_points' => 'array',
+            'common_issues' => 'array',
+        ];
+    }
 
     public function failures(): HasMany
     {
