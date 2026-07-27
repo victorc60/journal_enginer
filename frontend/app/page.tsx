@@ -27,6 +27,11 @@ const actions = [
     href: "/equipment",
   },
   {
+    label: "Morning round",
+    hint: "Run the daily walkaround, tick checkpoints, and manage the checklist itself.",
+    href: "/morning-rounds",
+  },
+  {
     label: "AI assistant",
     hint: "Run weekly summaries, equipment digests, and journal Q&A.",
     href: "/chat",

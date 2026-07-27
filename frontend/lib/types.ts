@@ -151,6 +151,54 @@ export type EquipmentDetailResponse = {
   };
 };
 
+export type MorningRoundTemplateItem = {
+  id: number;
+  section: string;
+  title: string;
+  details: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MorningRoundChecklistItem = {
+  morning_round_item_id: number;
+  section: string;
+  title: string;
+  details: string | null;
+  sort_order: number;
+  is_active: boolean;
+  is_checked: boolean;
+  note: string | null;
+  from_history_only: boolean;
+};
+
+export type MorningRoundEntry = {
+  id: number;
+  morning_round_item_id: number;
+  item_section: string;
+  item_title: string;
+  item_details: string | null;
+  is_checked: boolean;
+  note: string | null;
+};
+
+export type MorningRoundRecord = {
+  id: number;
+  round_date: string | null;
+  is_slaughter_day: boolean;
+  checked_count: number;
+  entries: MorningRoundEntry[];
+};
+
+export type MorningRoundResponse = {
+  date: string;
+  template_items: MorningRoundTemplateItem[];
+  checklist_items: MorningRoundChecklistItem[];
+  round: MorningRoundRecord | null;
+};
+
 export type SummaryResponse = {
   total_shifts: number;
   average_heads_count: number | null;

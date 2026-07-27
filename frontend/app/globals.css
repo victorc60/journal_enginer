@@ -922,6 +922,19 @@ h1 {
   line-height: 1.55;
 }
 
+.checklist-card-muted {
+  border-style: dashed;
+  opacity: 0.82;
+}
+
+.morning-round-status {
+  margin-top: 1rem;
+}
+
+.morning-round-button-row {
+  align-items: stretch;
+}
+
 .example-chip {
   display: grid;
   gap: 0.3rem;
