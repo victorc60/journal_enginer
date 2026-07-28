@@ -367,6 +367,8 @@ Rules:
 - Use empty arrays when no failures or maintenance events are present.
 - Use YYYY-MM-DD only when a date is clearly stated in the text; otherwise return null.
 - Capture temperatures and CO2 values only when clearly stated.
+- If the report states how much CO2 remains in the main storage tank after the shift, map that value to co2_end_kg.
+- If the remaining CO2 is stated in tons, convert it to kilograms only when the unit is explicit.
 - Put extra qualitative context into notes only when useful and grounded in the text.
 - Extract unresolved follow-up actions for the next shift into handover_items.
 - Handover items should describe what remains to watch, fix, verify, or pass on.

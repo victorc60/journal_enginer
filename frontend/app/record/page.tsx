@@ -62,6 +62,8 @@ type FormValues = {
   shiftDate: string;
   headsCount: string;
   workHours: string;
+  co2StartKg: string;
+  co2EndKg: string;
   co2UsedKg: string;
   outsideTempC: string;
   chillerTempC: string;
@@ -87,6 +89,8 @@ const initialValues: FormValues = {
   shiftDate: "",
   headsCount: "",
   workHours: "",
+  co2StartKg: "",
+  co2EndKg: "",
   co2UsedKg: "",
   outsideTempC: "",
   chillerTempC: "",
@@ -153,6 +157,8 @@ function buildManualChecklist(values: FormValues, handoverItems: HandoverDraft[]
     values.shiftDate.trim() !== "" ||
     values.headsCount.trim() !== "" ||
     values.workHours.trim() !== "" ||
+    values.co2StartKg.trim() !== "" ||
+    values.co2EndKg.trim() !== "" ||
     values.co2UsedKg.trim() !== "" ||
     values.outsideTempC.trim() !== "" ||
     values.chillerTempC.trim() !== "" ||
@@ -212,6 +218,10 @@ function buildManualChecklist(values: FormValues, handoverItems: HandoverDraft[]
 
   if (values.notes.trim() === "") {
     advisory.push("Нет текстовых заметок по смене.");
+  }
+
+  if (values.co2StartKg.trim() === "" || values.co2EndKg.trim() === "") {
+    advisory.push("Для контроля газохранилища лучше указывать CO2 start и CO2 end.");
   }
 
   if (normalizeManualHandoverItems(handoverItems).length === 0) {
@@ -363,6 +373,8 @@ export default function RecordPage() {
           shift_date: values.shiftDate,
           heads_count: parseNumber(values.headsCount),
           work_hours: parseNumber(values.workHours),
+          co2_start_kg: parseNumber(values.co2StartKg),
+          co2_end_kg: parseNumber(values.co2EndKg),
           co2_used_kg: parseNumber(values.co2UsedKg),
           outside_temp_c: parseNumber(values.outsideTempC),
           chiller_temp_c: parseNumber(values.chillerTempC),
@@ -782,6 +794,14 @@ export default function RecordPage() {
                   <dd>{parsedPreview.heads_count ?? "—"}</dd>
                 </div>
                 <div className="metric-item">
+                  <dt>CO2 start</dt>
+                  <dd>{formatMetric(parsedPreview.co2_start_kg, "kg")}</dd>
+                </div>
+                <div className="metric-item">
+                  <dt>CO2 end</dt>
+                  <dd>{formatMetric(parsedPreview.co2_end_kg, "kg")}</dd>
+                </div>
+                <div className="metric-item">
                   <dt>CO2 used</dt>
                   <dd>{formatMetric(parsedPreview.co2_used_kg, "kg")}</dd>
                 </div>
@@ -969,6 +989,30 @@ export default function RecordPage() {
                 step="0.25"
                 value={values.workHours}
                 onChange={(event) => setValues({ ...values, workHours: event.target.value })}
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">CO2 start kg</span>
+              <input
+                type="number"
+                className="text-input"
+                inputMode="decimal"
+                step="0.01"
+                value={values.co2StartKg}
+                onChange={(event) => setValues({ ...values, co2StartKg: event.target.value })}
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">CO2 end kg</span>
+              <input
+                type="number"
+                className="text-input"
+                inputMode="decimal"
+                step="0.01"
+                value={values.co2EndKg}
+                onChange={(event) => setValues({ ...values, co2EndKg: event.target.value })}
               />
             </label>
 

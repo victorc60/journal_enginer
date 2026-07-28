@@ -32,6 +32,16 @@ const actions = [
     href: "/morning-rounds",
   },
   {
+    label: "Evening prep",
+    hint: "Confirm tomorrow's slaughter-day setup before leaving the shift.",
+    href: "/evening-prep",
+  },
+  {
+    label: "Water & CO2",
+    hint: "Track water meters, dosing, and automatic CO2 history from saved shifts.",
+    href: "/water-co2",
+  },
+  {
     label: "AI assistant",
     hint: "Run weekly summaries, equipment digests, and journal Q&A.",
     href: "/chat",

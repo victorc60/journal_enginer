@@ -199,6 +199,97 @@ export type MorningRoundResponse = {
   round: MorningRoundRecord | null;
 };
 
+export type EveningPrepChecklistItem = {
+  evening_prep_item_id: number;
+  section: string;
+  title: string;
+  details: string | null;
+  sort_order: number;
+  is_active: boolean;
+  is_checked: boolean;
+  note: string | null;
+};
+
+export type EveningPrepEntry = {
+  id: number;
+  evening_prep_item_id: number;
+  item_section: string;
+  item_title: string;
+  item_details: string | null;
+  is_checked: boolean;
+  note: string | null;
+};
+
+export type EveningPrepRecord = {
+  id: number;
+  prep_date: string | null;
+  target_date: string | null;
+  is_next_day_slaughter: boolean;
+  checked_count: number;
+  entries: EveningPrepEntry[];
+};
+
+export type EveningPrepResponse = {
+  prep_date: string;
+  target_date: string;
+  checklist_items: EveningPrepChecklistItem[];
+  prep: EveningPrepRecord | null;
+};
+
+export type WaterControlLog = {
+  id: number;
+  log_date: string;
+  artesian_supply_start: string | number | null;
+  artesian_supply_end: string | number | null;
+  artesian_supply_used: string | number | null;
+  pump_power_start: string | number | null;
+  pump_power_end: string | number | null;
+  pump_power_used: string | number | null;
+  purified_water_start: string | number | null;
+  purified_water_end: string | number | null;
+  purified_water_used: string | number | null;
+  raw_water_direct_start: string | number | null;
+  raw_water_direct_end: string | number | null;
+  raw_water_direct_used: string | number | null;
+  sodium_hypochlorite_liters: string | number | null;
+  antiscalant_grams: string | number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WaterControlResponse = {
+  date: string;
+  log: WaterControlLog | null;
+  history: WaterControlLog[];
+};
+
+export type Co2ControlRow = {
+  id: number;
+  shift_date: string | null;
+  heads_count: number | null;
+  co2_start_kg: number | null;
+  co2_end_kg: number | null;
+  co2_used_kg: number | null;
+  co2_per_head_g: number | null;
+  remaining_tons: number | null;
+  storage_fill_percent: number | null;
+};
+
+export type Co2ControlResponse = {
+  summary: {
+    tracked_shifts_count: number;
+    total_heads_count: number;
+    total_co2_used_kg: number;
+    average_co2_per_head_g: number | null;
+    latest_remaining_kg: number | null;
+    latest_remaining_tons: number | null;
+    latest_fill_percent: number | null;
+    storage_capacity_kg: number;
+  };
+  rows: Co2ControlRow[];
+};
+
 export type SummaryResponse = {
   total_shifts: number;
   average_heads_count: number | null;
