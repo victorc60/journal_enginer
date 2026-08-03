@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import AccordionSection from "@/components/AccordionSection";
 import { apiBaseUrl, extractApiError } from "@/lib/api";
 import { formatCo2PerHead, formatMetric } from "@/lib/format";
 
@@ -616,12 +617,11 @@ export default function RecordPage() {
           evidence and handover.
         </p>
 
-        <section className="section-block">
-          <div className="section-heading-wrap">
-            <h2 className="section-heading">Attachments</h2>
-            <p className="section-text">Add photos, documents, or audio notes. They will upload right after the shift is saved.</p>
-          </div>
-
+        <AccordionSection
+          title="Attachments"
+          description="Add photos, documents, or audio notes. They will upload right after the shift is saved."
+          badge={selectedFiles.length > 0 ? `${selectedFiles.length} files` : "Optional"}
+        >
           <label className="field">
             <span className="field-label">Evidence files</span>
             <input
@@ -650,18 +650,14 @@ export default function RecordPage() {
           )}
 
           {attachmentStatusMessage ? <p className="inline-status">{attachmentStatusMessage}</p> : null}
-        </section>
+        </AccordionSection>
 
-        <div className="section-divider" />
-
-        <section className="section-block">
-          <div className="section-heading-wrap">
-            <h2 className="section-heading">Dictated shift report</h2>
-            <p className="section-text">
-              Paste a free-form report in Russian, Romanian, or English, or record it with your microphone. Preview is
-              required before saving so the checklist can validate the parsed data.
-            </p>
-          </div>
+        <AccordionSection
+          title="Dictated shift report"
+          description="Paste a free-form report in Russian, Romanian, or English, or record it with your microphone. Preview is required before saving."
+          badge={parsedPreview ? "Preview ready" : "AI"}
+          defaultOpen
+        >
 
           <form className="record-form" onSubmit={handleAiSave}>
             <div className="button-row">
@@ -738,8 +734,13 @@ export default function RecordPage() {
             </p>
           ) : null}
 
-          <div className="checklist-card">
-            <h3 className="section-title">AI save checklist</h3>
+          <AccordionSection
+            title="AI save checklist"
+            description="Before saving, review critical issues and advisory notes."
+            badge={`${aiChecklist.critical.length} critical`}
+            defaultOpen={Boolean(parsedPreview) || aiChecklist.critical.length > 0}
+            nested
+          >
             {aiChecklist.critical.length > 0 || aiChecklist.advisory.length > 0 ? (
               <div className="preview-stack">
                 {aiChecklist.critical.length > 0 ? (
@@ -778,112 +779,118 @@ export default function RecordPage() {
                 <span>Понимаю замечания и всё равно хочу сохранить AI-разбор.</span>
               </label>
             ) : null}
-          </div>
+          </AccordionSection>
 
           {parsedPreview ? (
-            <div className="preview-card" role="status">
-              <h3 className="section-title">Parsed preview</h3>
+            <AccordionSection
+              title="Parsed preview"
+              description="Review metrics, notes, failures, and handover before saving."
+              badge={`${parsedPreview.handover_items.length} handover`}
+              defaultOpen
+              nested
+            >
+              <div className="preview-card" role="status">
+                <dl className="metric-grid metric-grid-single">
+                  <div className="metric-item">
+                    <dt>Date</dt>
+                    <dd>{parsedPreview.shift_date}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>Heads</dt>
+                    <dd>{parsedPreview.heads_count ?? "—"}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>CO2 start</dt>
+                    <dd>{formatMetric(parsedPreview.co2_start_kg, "kg")}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>CO2 end</dt>
+                    <dd>{formatMetric(parsedPreview.co2_end_kg, "kg")}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>CO2 used</dt>
+                    <dd>{formatMetric(parsedPreview.co2_used_kg, "kg")}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>CO2 / head</dt>
+                    <dd>{formatCo2PerHead(parsedPreview.co2_per_head_g)}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>Outside temp</dt>
+                    <dd>{formatMetric(parsedPreview.outside_temp_c, "°C")}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>Chiller temp</dt>
+                    <dd>{formatMetric(parsedPreview.chiller_temp_c, "°C")}</dd>
+                  </div>
+                  <div className="metric-item">
+                    <dt>Meat temp</dt>
+                    <dd>{formatMetric(parsedPreview.meat_temp_c, "°C")}</dd>
+                  </div>
+                </dl>
 
-              <dl className="metric-grid metric-grid-single">
-                <div className="metric-item">
-                  <dt>Date</dt>
-                  <dd>{parsedPreview.shift_date}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>Heads</dt>
-                  <dd>{parsedPreview.heads_count ?? "—"}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>CO2 start</dt>
-                  <dd>{formatMetric(parsedPreview.co2_start_kg, "kg")}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>CO2 end</dt>
-                  <dd>{formatMetric(parsedPreview.co2_end_kg, "kg")}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>CO2 used</dt>
-                  <dd>{formatMetric(parsedPreview.co2_used_kg, "kg")}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>CO2 / head</dt>
-                  <dd>{formatCo2PerHead(parsedPreview.co2_per_head_g)}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>Outside temp</dt>
-                  <dd>{formatMetric(parsedPreview.outside_temp_c, "°C")}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>Chiller temp</dt>
-                  <dd>{formatMetric(parsedPreview.chiller_temp_c, "°C")}</dd>
-                </div>
-                <div className="metric-item">
-                  <dt>Meat temp</dt>
-                  <dd>{formatMetric(parsedPreview.meat_temp_c, "°C")}</dd>
-                </div>
-              </dl>
+                <div className="preview-stack">
+                  <div>
+                    <p className="preview-label">Notes</p>
+                    <p className="preview-copy">{parsedPreview.notes || "—"}</p>
+                  </div>
 
-              <div className="preview-stack">
-                <div>
-                  <p className="preview-label">Notes</p>
-                  <p className="preview-copy">{parsedPreview.notes || "—"}</p>
-                </div>
+                  <div>
+                    <p className="preview-label">Failures</p>
+                    {parsedPreview.failures.length > 0 ? (
+                      <div className="list-stack">
+                        {parsedPreview.failures.map((failure, index) => (
+                          <div key={`${failure.problem ?? "failure"}-${index}`} className="list-card">
+                            <p className="entry-title">
+                              {failure.equipment_name || "General issue"}
+                              {failure.severity ? ` · ${failure.severity}` : ""}
+                            </p>
+                            <p className="entry-copy">{failure.problem || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="preview-copy">No failures detected.</p>
+                    )}
+                  </div>
 
-                <div>
-                  <p className="preview-label">Failures</p>
-                  {parsedPreview.failures.length > 0 ? (
-                    <div className="list-stack">
-                      {parsedPreview.failures.map((failure, index) => (
-                        <div key={`${failure.problem ?? "failure"}-${index}`} className="list-card">
-                          <p className="entry-title">
-                            {failure.equipment_name || "General issue"}
-                            {failure.severity ? ` · ${failure.severity}` : ""}
-                          </p>
-                          <p className="entry-copy">{failure.problem || "—"}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="preview-copy">No failures detected.</p>
-                  )}
-                </div>
+                  <div>
+                    <p className="preview-label">Maintenance events</p>
+                    {parsedPreview.maintenance_events.length > 0 ? (
+                      <div className="list-stack">
+                        {parsedPreview.maintenance_events.map((event, index) => (
+                          <div key={`${event.action ?? "maintenance"}-${index}`} className="list-card">
+                            <p className="entry-title">{event.equipment_name || "General maintenance"}</p>
+                            <p className="entry-copy">{event.action || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="preview-copy">No maintenance events detected.</p>
+                    )}
+                  </div>
 
-                <div>
-                  <p className="preview-label">Maintenance events</p>
-                  {parsedPreview.maintenance_events.length > 0 ? (
-                    <div className="list-stack">
-                      {parsedPreview.maintenance_events.map((event, index) => (
-                        <div key={`${event.action ?? "maintenance"}-${index}`} className="list-card">
-                          <p className="entry-title">{event.equipment_name || "General maintenance"}</p>
-                          <p className="entry-copy">{event.action || "—"}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="preview-copy">No maintenance events detected.</p>
-                  )}
-                </div>
-
-                <div>
-                  <p className="preview-label">Handover items</p>
-                  {parsedPreview.handover_items.length > 0 ? (
-                    <div className="list-stack">
-                      {parsedPreview.handover_items.map((item, index) => (
-                        <div key={`${item.title ?? "handover"}-${index}`} className="list-card">
-                          <p className="entry-title">{item.title || "Untitled follow-up"}</p>
-                          <p className="entry-copy">{item.details || "No details."}</p>
-                          <p className="entry-copy">
-                            {item.equipment_name || "General"} · {item.priority || "normal"}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="preview-copy">No handover items detected.</p>
-                  )}
+                  <div>
+                    <p className="preview-label">Handover items</p>
+                    {parsedPreview.handover_items.length > 0 ? (
+                      <div className="list-stack">
+                        {parsedPreview.handover_items.map((item, index) => (
+                          <div key={`${item.title ?? "handover"}-${index}`} className="list-card">
+                            <p className="entry-title">{item.title || "Untitled follow-up"}</p>
+                            <p className="entry-copy">{item.details || "No details."}</p>
+                            <p className="entry-copy">
+                              {item.equipment_name || "General"} · {item.priority || "normal"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="preview-copy">No handover items detected.</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            </AccordionSection>
           ) : null}
 
           {aiSavedShift ? (
@@ -895,20 +902,20 @@ export default function RecordPage() {
               </Link>
             </div>
           ) : null}
-        </section>
+        </AccordionSection>
 
-        <div className="section-divider" />
-
-        <section className="section-block">
-          <div className="section-heading-wrap">
-            <h2 className="section-heading">Manual entry</h2>
-            <p className="section-text">
-              Use this form when you want to enter core numbers directly and prepare a handover for the next shift.
-            </p>
-          </div>
-
-          <div className="checklist-card">
-            <h3 className="section-title">Manual save checklist</h3>
+        <AccordionSection
+          title="Manual entry"
+          description="Use this form when you want to enter core numbers directly and prepare a handover for the next shift."
+          badge="Direct input"
+        >
+          <AccordionSection
+            title="Manual save checklist"
+            description="Before saving, review required fields and handover quality."
+            badge={`${manualChecklist.critical.length} critical`}
+            defaultOpen={manualChecklist.critical.length > 0}
+            nested
+          >
             {manualChecklist.critical.length > 0 || manualChecklist.advisory.length > 0 ? (
               <div className="preview-stack">
                 {manualChecklist.critical.length > 0 ? (
@@ -947,267 +954,303 @@ export default function RecordPage() {
                 <span>Понимаю замечания и всё равно хочу сохранить ручную запись.</span>
               </label>
             ) : null}
-          </div>
+          </AccordionSection>
 
           <form className="record-form" onSubmit={handleSubmit}>
-            <label className="field">
-              <span className="field-label">Date</span>
-              <input
-                type="date"
-                className="text-input"
-                value={values.shiftDate}
-                onChange={(event) => {
-                  setValues({ ...values, shiftDate: event.target.value });
-                  setManualChecklistConfirmed(false);
-                }}
-                required
-              />
-            </label>
+            <AccordionSection
+              title="Core metrics"
+              description="Date, heads count, and work hours for the shift."
+              badge="Base"
+              defaultOpen
+              nested
+            >
+              <div className="filter-grid">
+                <label className="field">
+                  <span className="field-label">Date</span>
+                  <input
+                    type="date"
+                    className="text-input"
+                    value={values.shiftDate}
+                    onChange={(event) => {
+                      setValues({ ...values, shiftDate: event.target.value });
+                      setManualChecklistConfirmed(false);
+                    }}
+                    required
+                  />
+                </label>
 
-            <label className="field">
-              <span className="field-label">Heads count</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="numeric"
-                min="1"
-                step="1"
-                value={values.headsCount}
-                onChange={(event) => {
-                  setValues({ ...values, headsCount: event.target.value });
-                  setManualChecklistConfirmed(false);
-                }}
-              />
-            </label>
+                <label className="field">
+                  <span className="field-label">Heads count</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    value={values.headsCount}
+                    onChange={(event) => {
+                      setValues({ ...values, headsCount: event.target.value });
+                      setManualChecklistConfirmed(false);
+                    }}
+                  />
+                </label>
 
-            <label className="field">
-              <span className="field-label">Work hours</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="decimal"
-                step="0.25"
-                value={values.workHours}
-                onChange={(event) => setValues({ ...values, workHours: event.target.value })}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">CO2 start kg</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="decimal"
-                step="0.01"
-                value={values.co2StartKg}
-                onChange={(event) => setValues({ ...values, co2StartKg: event.target.value })}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">CO2 end kg</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="decimal"
-                step="0.01"
-                value={values.co2EndKg}
-                onChange={(event) => setValues({ ...values, co2EndKg: event.target.value })}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">CO2 used kg</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="decimal"
-                step="0.01"
-                value={values.co2UsedKg}
-                onChange={(event) => {
-                  setValues({ ...values, co2UsedKg: event.target.value });
-                  setManualChecklistConfirmed(false);
-                }}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">Outside temperature</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="decimal"
-                step="0.1"
-                value={values.outsideTempC}
-                onChange={(event) => setValues({ ...values, outsideTempC: event.target.value })}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">Chiller temperature</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="decimal"
-                step="0.1"
-                value={values.chillerTempC}
-                onChange={(event) => {
-                  setValues({ ...values, chillerTempC: event.target.value });
-                  setManualChecklistConfirmed(false);
-                }}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">Meat temperature</span>
-              <input
-                type="number"
-                className="text-input"
-                inputMode="decimal"
-                step="0.1"
-                value={values.meatTempC}
-                onChange={(event) => {
-                  setValues({ ...values, meatTempC: event.target.value });
-                  setManualChecklistConfirmed(false);
-                }}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">Notes</span>
-              <textarea
-                className="text-input text-area"
-                rows={4}
-                value={values.notes}
-                onChange={(event) => setValues({ ...values, notes: event.target.value })}
-              />
-            </label>
-
-            <div className="detail-section">
-              <div className="toolbar-row toolbar-row-spread">
-                <div>
-                  <h3 className="section-title">Handover items</h3>
-                  <p className="section-text">Capture what the next shift must check, finish, or monitor.</p>
-                </div>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => setManualHandoverItems((current) => [...current, createHandoverDraft()])}
-                >
-                  Add handover item
-                </button>
+                <label className="field">
+                  <span className="field-label">Work hours</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="decimal"
+                    step="0.25"
+                    value={values.workHours}
+                    onChange={(event) => setValues({ ...values, workHours: event.target.value })}
+                  />
+                </label>
               </div>
+            </AccordionSection>
 
-              {manualHandoverItems.length > 0 ? (
-                <div className="list-stack">
-                  {manualHandoverItems.map((item, index) => (
-                    <div key={`handover-${index}`} className="list-card">
-                      <div className="filter-grid">
+            <AccordionSection
+              title="CO2 and temperatures"
+              description="Gas usage, outside temperature, chiller, and meat temperature."
+              badge="6 fields"
+              nested
+            >
+              <div className="filter-grid">
+                <label className="field">
+                  <span className="field-label">CO2 start kg</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="decimal"
+                    step="0.01"
+                    value={values.co2StartKg}
+                    onChange={(event) => setValues({ ...values, co2StartKg: event.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field-label">CO2 end kg</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="decimal"
+                    step="0.01"
+                    value={values.co2EndKg}
+                    onChange={(event) => setValues({ ...values, co2EndKg: event.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field-label">CO2 used kg</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="decimal"
+                    step="0.01"
+                    value={values.co2UsedKg}
+                    onChange={(event) => {
+                      setValues({ ...values, co2UsedKg: event.target.value });
+                      setManualChecklistConfirmed(false);
+                    }}
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field-label">Outside temperature</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="decimal"
+                    step="0.1"
+                    value={values.outsideTempC}
+                    onChange={(event) => setValues({ ...values, outsideTempC: event.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field-label">Chiller temperature</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="decimal"
+                    step="0.1"
+                    value={values.chillerTempC}
+                    onChange={(event) => {
+                      setValues({ ...values, chillerTempC: event.target.value });
+                      setManualChecklistConfirmed(false);
+                    }}
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field-label">Meat temperature</span>
+                  <input
+                    type="number"
+                    className="text-input"
+                    inputMode="decimal"
+                    step="0.1"
+                    value={values.meatTempC}
+                    onChange={(event) => {
+                      setValues({ ...values, meatTempC: event.target.value });
+                      setManualChecklistConfirmed(false);
+                    }}
+                  />
+                </label>
+              </div>
+            </AccordionSection>
+
+            <AccordionSection
+              title="Shift notes"
+              description="Short text notes about the shift, deviations, or anything important to pass on."
+              badge={values.notes.trim() === "" ? "Optional" : "Filled"}
+              nested
+            >
+              <label className="field">
+                <span className="field-label">Notes</span>
+                <textarea
+                  className="text-input text-area"
+                  rows={4}
+                  value={values.notes}
+                  onChange={(event) => setValues({ ...values, notes: event.target.value })}
+                />
+              </label>
+            </AccordionSection>
+
+            <AccordionSection
+              title="Handover items"
+              description="Capture what the next shift must check, finish, or monitor."
+              badge={`${manualHandoverItems.length} items`}
+              defaultOpen={manualHandoverItems.length > 0}
+              nested
+            >
+              <div className="detail-section">
+                <div className="toolbar-row toolbar-row-spread">
+                  <div>
+                    <h3 className="section-title">Handover items</h3>
+                    <p className="section-text">Capture what the next shift must check, finish, or monitor.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setManualHandoverItems((current) => [...current, createHandoverDraft()])}
+                  >
+                    Add handover item
+                  </button>
+                </div>
+
+                {manualHandoverItems.length > 0 ? (
+                  <div className="list-stack">
+                    {manualHandoverItems.map((item, index) => (
+                      <div key={`handover-${index}`} className="list-card">
+                        <div className="filter-grid">
+                          <label className="field">
+                            <span className="field-label">Title</span>
+                            <input
+                              className="text-input"
+                              value={item.title}
+                              onChange={(event) => {
+                                const next = [...manualHandoverItems];
+                                next[index] = { ...item, title: event.target.value };
+                                setManualHandoverItems(next);
+                                setManualChecklistConfirmed(false);
+                              }}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Equipment</span>
+                            <input
+                              className="text-input"
+                              value={item.equipment_name}
+                              onChange={(event) => {
+                                const next = [...manualHandoverItems];
+                                next[index] = { ...item, equipment_name: event.target.value };
+                                setManualHandoverItems(next);
+                              }}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Assigned to</span>
+                            <input
+                              className="text-input"
+                              value={item.assigned_to}
+                              onChange={(event) => {
+                                const next = [...manualHandoverItems];
+                                next[index] = { ...item, assigned_to: event.target.value };
+                                setManualHandoverItems(next);
+                              }}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Due date</span>
+                            <input
+                              type="date"
+                              className="text-input"
+                              value={item.due_date}
+                              onChange={(event) => {
+                                const next = [...manualHandoverItems];
+                                next[index] = { ...item, due_date: event.target.value };
+                                setManualHandoverItems(next);
+                              }}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Priority</span>
+                            <select
+                              className="text-input"
+                              value={item.priority}
+                              onChange={(event) => {
+                                const next = [...manualHandoverItems];
+                                next[index] = { ...item, priority: event.target.value };
+                                setManualHandoverItems(next);
+                              }}
+                            >
+                              <option value="normal">Normal</option>
+                              <option value="high">High</option>
+                              <option value="urgent">Urgent</option>
+                              <option value="low">Low</option>
+                            </select>
+                          </label>
+                        </div>
+
                         <label className="field">
-                          <span className="field-label">Title</span>
-                          <input
-                            className="text-input"
-                            value={item.title}
+                          <span className="field-label">Details</span>
+                          <textarea
+                            className="text-input text-area"
+                            rows={3}
+                            value={item.details}
                             onChange={(event) => {
                               const next = [...manualHandoverItems];
-                              next[index] = { ...item, title: event.target.value };
+                              next[index] = { ...item, details: event.target.value };
                               setManualHandoverItems(next);
                               setManualChecklistConfirmed(false);
                             }}
                           />
                         </label>
 
-                        <label className="field">
-                          <span className="field-label">Equipment</span>
-                          <input
-                            className="text-input"
-                            value={item.equipment_name}
-                            onChange={(event) => {
-                              const next = [...manualHandoverItems];
-                              next[index] = { ...item, equipment_name: event.target.value };
-                              setManualHandoverItems(next);
-                            }}
-                          />
-                        </label>
-
-                        <label className="field">
-                          <span className="field-label">Assigned to</span>
-                          <input
-                            className="text-input"
-                            value={item.assigned_to}
-                            onChange={(event) => {
-                              const next = [...manualHandoverItems];
-                              next[index] = { ...item, assigned_to: event.target.value };
-                              setManualHandoverItems(next);
-                            }}
-                          />
-                        </label>
-
-                        <label className="field">
-                          <span className="field-label">Due date</span>
-                          <input
-                            type="date"
-                            className="text-input"
-                            value={item.due_date}
-                            onChange={(event) => {
-                              const next = [...manualHandoverItems];
-                              next[index] = { ...item, due_date: event.target.value };
-                              setManualHandoverItems(next);
-                            }}
-                          />
-                        </label>
-
-                        <label className="field">
-                          <span className="field-label">Priority</span>
-                          <select
-                            className="text-input"
-                            value={item.priority}
-                            onChange={(event) => {
-                              const next = [...manualHandoverItems];
-                              next[index] = { ...item, priority: event.target.value };
-                              setManualHandoverItems(next);
-                            }}
-                          >
-                            <option value="normal">Normal</option>
-                            <option value="high">High</option>
-                            <option value="urgent">Urgent</option>
-                            <option value="low">Low</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <label className="field">
-                        <span className="field-label">Details</span>
-                        <textarea
-                          className="text-input text-area"
-                          rows={3}
-                          value={item.details}
-                          onChange={(event) => {
-                            const next = [...manualHandoverItems];
-                            next[index] = { ...item, details: event.target.value };
-                            setManualHandoverItems(next);
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            setManualHandoverItems((current) =>
+                              current.filter((_, currentIndex) => currentIndex !== index),
+                            );
                             setManualChecklistConfirmed(false);
                           }}
-                        />
-                      </label>
-
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => {
-                          setManualHandoverItems((current) => current.filter((_, currentIndex) => currentIndex !== index));
-                          setManualChecklistConfirmed(false);
-                        }}
-                      >
-                        Remove handover item
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="section-empty">No manual handover items yet.</p>
-              )}
-            </div>
+                        >
+                          Remove handover item
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="section-empty">No manual handover items yet.</p>
+                )}
+              </div>
+            </AccordionSection>
 
             <button
               type="submit"
@@ -1217,7 +1260,7 @@ export default function RecordPage() {
               {isSubmitting ? "Saving..." : "Save"}
             </button>
           </form>
-        </section>
+        </AccordionSection>
 
         {errorMessage ? (
           <p className="status-banner status-error" role="alert">

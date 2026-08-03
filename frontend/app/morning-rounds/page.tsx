@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import AccordionSection from "@/components/AccordionSection";
 import { apiBaseUrl, buildQuery, extractApiError, fetchJson } from "@/lib/api";
 import {
   MorningRoundChecklistItem,
@@ -454,17 +455,12 @@ export default function MorningRoundsPage() {
               </article>
             </div>
 
-            <div className="section-divider" />
-
-            <section className="detail-section">
-              <div className="section-heading-wrap">
-                <h2 className="section-title">Чеклист обхода</h2>
-                <p className="section-text">
-                  Если это день забоя, сохраните обход в базу. Для обычного дня список остается только рабочей заметкой
-                  на экране и не записывается дальше.
-                </p>
-              </div>
-
+            <AccordionSection
+              title="Чеклист обхода"
+              description="Если это день забоя, сохраните обход в базу. Для обычного дня список остается только рабочей заметкой на экране."
+              badge={`${checkedCount}/${activeChecklistCount}`}
+              defaultOpen
+            >
               <div className="filter-grid">
                 <label className="field">
                   <span className="field-label">Дата</span>
@@ -509,59 +505,65 @@ export default function MorningRoundsPage() {
                   </div>
                 ) : null}
 
-                {groupedChecklistItems.map(([section, items]) => (
-                  <section key={section} className="detail-section">
-                    <div className="section-heading-wrap">
-                      <h3 className="section-title">{section}</h3>
-                      <p className="section-text">Пункты, которые будут проходиться на выбранную дату.</p>
-                    </div>
+                {groupedChecklistItems.map(([section, items]) => {
+                  const sectionCheckedCount = items.filter((item) => item.is_checked).length;
 
-                    <div className="list-stack">
-                      {items.map((item) => (
-                        <article
-                          key={item.morning_round_item_id}
-                          className={`checklist-card${item.from_history_only ? " checklist-card-muted" : ""}`}
-                        >
-                          <div className="toolbar-row toolbar-row-spread">
-                            <div>
-                              <p className="entry-title">{item.title}</p>
-                              {item.details ? <p className="section-text">{item.details}</p> : null}
+                  return (
+                    <AccordionSection
+                      key={section}
+                      title={section}
+                      description="Пункты, которые будут проходиться на выбранную дату."
+                      badge={`${sectionCheckedCount}/${items.length}`}
+                      defaultOpen={sectionCheckedCount > 0 || groupedChecklistItems.length === 1}
+                      nested
+                    >
+                      <div className="list-stack">
+                        {items.map((item) => (
+                          <article
+                            key={item.morning_round_item_id}
+                            className={`checklist-card${item.from_history_only ? " checklist-card-muted" : ""}`}
+                          >
+                            <div className="toolbar-row toolbar-row-spread">
+                              <div>
+                                <p className="entry-title">{item.title}</p>
+                                {item.details ? <p className="section-text">{item.details}</p> : null}
+                              </div>
+
+                              <div className="tag-row">
+                                {item.from_history_only ? <span className="tag-pill">Архивный пункт</span> : null}
+                                {!item.is_active ? <span className="tag-pill">Не активен</span> : null}
+                              </div>
                             </div>
 
-                            <div className="tag-row">
-                              {item.from_history_only ? <span className="tag-pill">Архивный пункт</span> : null}
-                              {!item.is_active ? <span className="tag-pill">Не активен</span> : null}
-                            </div>
-                          </div>
+                            <label className="checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={item.is_checked}
+                                onChange={(event) =>
+                                  updateChecklistItem(item.morning_round_item_id, { is_checked: event.target.checked })
+                                }
+                              />
+                              <span>Проверено / выполнено</span>
+                            </label>
 
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={item.is_checked}
-                              onChange={(event) =>
-                                updateChecklistItem(item.morning_round_item_id, { is_checked: event.target.checked })
-                              }
-                            />
-                            <span>Проверено / выполнено</span>
-                          </label>
-
-                          <label className="field">
-                            <span className="field-label">Комментарий</span>
-                            <textarea
-                              rows={3}
-                              className="text-input text-area"
-                              placeholder="Например: подтянул цепь, проверил датчик, отрегулировал узел."
-                              value={item.note ?? ""}
-                              onChange={(event) =>
-                                updateChecklistItem(item.morning_round_item_id, { note: event.target.value })
-                              }
-                            />
-                          </label>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                ))}
+                            <label className="field">
+                              <span className="field-label">Комментарий</span>
+                              <textarea
+                                rows={3}
+                                className="text-input text-area"
+                                placeholder="Например: подтянул цепь, проверил датчик, отрегулировал узел."
+                                value={item.note ?? ""}
+                                onChange={(event) =>
+                                  updateChecklistItem(item.morning_round_item_id, { note: event.target.value })
+                                }
+                              />
+                            </label>
+                          </article>
+                        ))}
+                      </div>
+                    </AccordionSection>
+                  );
+                })}
               </div>
 
               <div className="button-row">
@@ -574,27 +576,23 @@ export default function MorningRoundsPage() {
                   {savingRound ? "Сохраняю обход..." : "Сохранить обход"}
                 </button>
               </div>
-            </section>
+            </AccordionSection>
 
-            <div className="section-divider" />
-
-            <section className="detail-section">
-              <div className="section-heading-wrap">
-                <h2 className="section-title">Редактор точек обхода</h2>
-                <p className="section-text">
-                  Здесь вы регулируете MVP сами: добавляете новые места обхода, меняете названия и убираете то, что уже
-                  не нужно.
-                </p>
-              </div>
+            <AccordionSection
+              title="Редактор точек обхода"
+              description="Здесь вы сами регулируете MVP: добавляете новые места обхода, меняете названия и убираете лишнее."
+              badge={`${templateItems.filter((item) => item.is_active).length} активных`}
+            >
 
               {editorMessage ? <p className="inline-status morning-round-status">{editorMessage}</p> : null}
 
-              <article className="checklist-card">
-                <div className="section-heading-wrap">
-                  <h3 className="section-title">Добавить новый пункт</h3>
-                  <p className="section-text">Новый пункт сразу попадет в активный утренний обход.</p>
-                </div>
-
+              <AccordionSection
+                title="Добавить новый пункт"
+                description="Новый пункт сразу попадет в активный утренний обход."
+                badge="Быстрое добавление"
+                defaultOpen
+                nested
+              >
                 <div className="filter-grid">
                   <label className="field">
                     <span className="field-label">Раздел</span>
@@ -663,16 +661,17 @@ export default function MorningRoundsPage() {
                     {creatingItem ? "Добавляю пункт..." : "Добавить пункт обхода"}
                   </button>
                 </div>
-              </article>
+              </AccordionSection>
 
               <div className="list-stack">
                 {groupedTemplateItems.map(([section, items]) => (
-                  <section key={section} className="detail-section">
-                    <div className="section-heading-wrap">
-                      <h3 className="section-title">{section}</h3>
-                      <p className="section-text">Активные пункты, которые сейчас входят в ежедневный обход.</p>
-                    </div>
-
+                  <AccordionSection
+                    key={section}
+                    title={section}
+                    description="Активные пункты, которые сейчас входят в ежедневный обход."
+                    badge={`${items.length} пунктов`}
+                    nested
+                  >
                     <div className="list-stack">
                       {items.map((item) => {
                         const isSavingItem = savingItemIds.includes(item.id);
@@ -747,10 +746,10 @@ export default function MorningRoundsPage() {
                         );
                       })}
                     </div>
-                  </section>
+                  </AccordionSection>
                 ))}
               </div>
-            </section>
+            </AccordionSection>
           </>
         ) : null}
       </section>

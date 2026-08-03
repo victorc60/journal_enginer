@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import AccordionSection from "@/components/AccordionSection";
 import { apiBaseUrl, buildQuery, extractApiError, fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { EveningPrepChecklistItem, EveningPrepResponse } from "@/lib/types";
@@ -248,16 +249,12 @@ export default function EveningPrepPage() {
               </article>
             </div>
 
-            <div className="section-divider" />
-
-            <section className="detail-section">
-              <div className="section-heading-wrap">
-                <h2 className="section-title">Чек-лист подготовки</h2>
-                <p className="section-text">
-                  Отметьте только те действия, которые действительно выполнены перед уходом со смены.
-                </p>
-              </div>
-
+            <AccordionSection
+              title="Чек-лист подготовки"
+              description="Отмечайте только те действия, которые действительно выполнены перед уходом со смены."
+              badge={`${checkedCount}/${checklistItems.length}`}
+              defaultOpen
+            >
               <div className="filter-grid">
                 <label className="field">
                   <span className="field-label">Дата закрытия смены</span>
@@ -301,51 +298,57 @@ export default function EveningPrepPage() {
               {prepMessage ? <p className="inline-status morning-round-status">{prepMessage}</p> : null}
 
               <div className="list-stack">
-                {groupedChecklistItems.map(([section, items]) => (
-                  <section key={section} className="detail-section">
-                    <div className="section-heading-wrap">
-                      <h3 className="section-title">{section}</h3>
-                      <p className="section-text">Подтвердите, что этот участок подготовлен на утренний запуск.</p>
-                    </div>
+                {groupedChecklistItems.map(([section, items]) => {
+                  const sectionCheckedCount = items.filter((item) => item.is_checked).length;
 
-                    <div className="list-stack">
-                      {items.map((item) => (
-                        <article key={item.evening_prep_item_id} className="checklist-card">
-                          <div className="toolbar-row toolbar-row-spread">
-                            <div>
-                              <p className="entry-title">{item.title}</p>
-                              {item.details ? <p className="section-text">{item.details}</p> : null}
+                  return (
+                    <AccordionSection
+                      key={section}
+                      title={section}
+                      description="Подтвердите, что этот участок подготовлен на утренний запуск."
+                      badge={`${sectionCheckedCount}/${items.length}`}
+                      defaultOpen={sectionCheckedCount > 0 || groupedChecklistItems.length === 1}
+                      nested
+                    >
+                      <div className="list-stack">
+                        {items.map((item) => (
+                          <article key={item.evening_prep_item_id} className="checklist-card">
+                            <div className="toolbar-row toolbar-row-spread">
+                              <div>
+                                <p className="entry-title">{item.title}</p>
+                                {item.details ? <p className="section-text">{item.details}</p> : null}
+                              </div>
                             </div>
-                          </div>
 
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={item.is_checked}
-                              onChange={(event) =>
-                                updateChecklistItem(item.evening_prep_item_id, { is_checked: event.target.checked })
-                              }
-                            />
-                            <span>Сделано</span>
-                          </label>
+                            <label className="checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={item.is_checked}
+                                onChange={(event) =>
+                                  updateChecklistItem(item.evening_prep_item_id, { is_checked: event.target.checked })
+                                }
+                              />
+                              <span>Сделано</span>
+                            </label>
 
-                          <label className="field">
-                            <span className="field-label">Комментарий</span>
-                            <textarea
-                              rows={3}
-                              className="text-input text-area"
-                              placeholder="Например: вода набрана, таймер выставлен, камеры проверены."
-                              value={item.note ?? ""}
-                              onChange={(event) =>
-                                updateChecklistItem(item.evening_prep_item_id, { note: event.target.value })
-                              }
-                            />
-                          </label>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                ))}
+                            <label className="field">
+                              <span className="field-label">Комментарий</span>
+                              <textarea
+                                rows={3}
+                                className="text-input text-area"
+                                placeholder="Например: вода набрана, таймер выставлен, камеры проверены."
+                                value={item.note ?? ""}
+                                onChange={(event) =>
+                                  updateChecklistItem(item.evening_prep_item_id, { note: event.target.value })
+                                }
+                              />
+                            </label>
+                          </article>
+                        ))}
+                      </div>
+                    </AccordionSection>
+                  );
+                })}
               </div>
 
               <div className="button-row">
@@ -358,7 +361,7 @@ export default function EveningPrepPage() {
                   {savingPrep ? "Сохраняю подготовку..." : "Сохранить подготовку"}
                 </button>
               </div>
-            </section>
+            </AccordionSection>
           </>
         ) : null}
       </section>
