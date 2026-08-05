@@ -60,8 +60,41 @@ class EveningPrepApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('prep_date', '2026-07-28')
             ->assertJsonPath('target_date', '2026-07-29')
+            ->assertJsonPath('expected_is_next_day_slaughter', true)
             ->assertJsonCount(4, 'checklist_items')
             ->assertJsonPath('prep', null);
+    }
+
+    public function test_it_marks_thursday_closing_as_non_workday_prep_for_friday(): void
+    {
+        $response = $this->getJson('/api/evening-preps?date=2026-08-06');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('prep_date', '2026-08-06')
+            ->assertJsonPath('target_date', '2026-08-07')
+            ->assertJsonPath('expected_is_next_day_slaughter', false);
+
+        $item = EveningPrepItem::query()->firstOrFail();
+
+        $saveResponse = $this->postJson('/api/evening-preps', [
+            'prep_date' => '2026-08-06',
+            'is_next_day_slaughter' => true,
+            'entries' => [
+                [
+                    'evening_prep_item_id' => $item->id,
+                    'is_checked' => true,
+                    'note' => 'Подготовил.',
+                ],
+            ],
+        ]);
+
+        $saveResponse
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'По графику вечерняя подготовка сохраняется только если следующий день попадает на рабочую неделю с воскресенья по четверг.'
+            );
     }
 
     public function test_it_rejects_saving_prep_when_next_day_is_not_slaughter_day(): void

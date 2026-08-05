@@ -5,24 +5,11 @@ import { useEffect, useState } from "react";
 import AccordionSection from "@/components/AccordionSection";
 import { apiBaseUrl, buildQuery, extractApiError, fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { addDaysToInputDate, getTodayInputValue } from "@/lib/work-week";
 import { EveningPrepChecklistItem, EveningPrepResponse } from "@/lib/types";
 
-function getTodayInputValue() {
-  const now = new Date();
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-
-  return localDate.toISOString().slice(0, 10);
-}
-
 function getNextDateInputValue(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-
-  date.setDate(date.getDate() + 1);
-
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-
-  return localDate.toISOString().slice(0, 10);
+  return addDaysToInputDate(value, 1);
 }
 
 async function fetchEveningPrepData(date: string) {
@@ -72,6 +59,7 @@ export default function EveningPrepPage() {
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState("");
   const [checklistItems, setChecklistItems] = useState<EveningPrepChecklistItem[]>([]);
+  const [expectedIsNextDaySlaughter, setExpectedIsNextDaySlaughter] = useState(false);
   const [isNextDaySlaughter, setIsNextDaySlaughter] = useState(false);
   const [hasSavedPrep, setHasSavedPrep] = useState(false);
   const [savingPrep, setSavingPrep] = useState(false);
@@ -80,8 +68,9 @@ export default function EveningPrepPage() {
   const applyResponseData = (data: EveningPrepResponse) => {
     setChecklistItems(sortChecklistItems(data.checklist_items));
     setTargetDate(data.target_date);
+    setExpectedIsNextDaySlaughter(Boolean(data.expected_is_next_day_slaughter));
     setHasSavedPrep(Boolean(data.prep));
-    setIsNextDaySlaughter(Boolean(data.prep?.is_next_day_slaughter));
+    setIsNextDaySlaughter(Boolean(data.prep?.is_next_day_slaughter ?? data.expected_is_next_day_slaughter));
     setLoadingError("");
   };
 
@@ -277,20 +266,36 @@ export default function EveningPrepPage() {
                   <input
                     type="checkbox"
                     checked={hasSavedPrep ? true : isNextDaySlaughter}
-                    disabled={hasSavedPrep}
+                    disabled={hasSavedPrep || !expectedIsNextDaySlaughter}
                     onChange={(event) => setIsNextDaySlaughter(event.target.checked)}
                   />
-                  <span>{hasSavedPrep ? "Подготовка на день забоя уже сохранена" : "Завтра день забоя"}</span>
+                  <span>
+                    {hasSavedPrep
+                      ? "Подготовка на день забоя уже сохранена"
+                      : expectedIsNextDaySlaughter
+                        ? "Завтра день забоя"
+                        : "Завтра нерабочий день по графику"}
+                  </span>
                 </label>
                 {hasSavedPrep ? <span className="tag-pill tag-pill-resolved">Подготовка уже сохранена</span> : null}
               </div>
 
-              {!hasSavedPrep && !isNextDaySlaughter ? (
-                <div className="status-banner">
-                  <p className="status-title">Обычный следующий день</p>
+              {!hasSavedPrep && expectedIsNextDaySlaughter ? (
+                <div className="status-banner status-success" role="status">
+                  <p className="status-title">Рабочая неделя уже учтена</p>
                   <p className="status-copy">
-                    Если завтра не день забоя, этот чек-лист можно использовать как подсказку, но он не будет записан в
-                    базу.
+                    Если следующий день попадает на диапазон воскресенье-четверг, чек-лист автоматически готов к
+                    сохранению. Галочку можно снять, если завтра исключение и забоя не будет.
+                  </p>
+                </div>
+              ) : null}
+
+              {!hasSavedPrep && !expectedIsNextDaySlaughter ? (
+                <div className="status-banner">
+                  <p className="status-title">Следующий день вне рабочей недели</p>
+                  <p className="status-copy">
+                    Чек-лист можно использовать как подсказку, но если следующий день выпадает на пятницу или субботу,
+                    запись в базу не сохраняется.
                   </p>
                 </div>
               ) : null}

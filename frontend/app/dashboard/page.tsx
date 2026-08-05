@@ -1,6 +1,7 @@
 import Link from "next/link";
 import DashboardCharts from "./dashboard-charts";
 import { fetchJson } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import { Co2Response, FailuresResponse, SummaryResponse, TemperaturesResponse } from "@/lib/types";
 
 function formatMetric(value: number | null, suffix = "") {
@@ -32,8 +33,16 @@ export default async function DashboardPage() {
           <p className="eyebrow">Dashboard</p>
           <h1>Analytics</h1>
           <p className="intro">
-            Track output, CO2 efficiency, failures, attachments, and handover pressure across saved shifts.
+            Панель по текущей рабочей неделе. Вся аналитика по умолчанию считает период с воскресенья по четверг
+            включительно.
           </p>
+
+          <div className="status-banner status-success" role="status">
+            <p className="status-title">Текущий рабочий диапазон</p>
+            <p className="status-copy">
+              {formatDate(summary.range.from)} - {formatDate(summary.range.to)}
+            </p>
+          </div>
 
           <div className="stats-grid">
             <article className="stat-card">

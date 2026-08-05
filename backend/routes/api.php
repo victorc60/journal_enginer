@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AiAssistantController;
 use App\Http\Controllers\Api\AiInsightsController;
 use App\Http\Controllers\Api\AiShiftController;
+use App\Http\Controllers\Api\ActivityCalendarController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\Co2ControlController;
 use App\Http\Controllers\Api\EveningPrepController;
@@ -29,6 +30,7 @@ Route::post('/shifts/from-text', [AiShiftController::class, 'store']);
 Route::post('/ai/ask', [AiAssistantController::class, 'ask']);
 Route::get('/ai/insights', [AiInsightsController::class, 'index']);
 Route::post('/transcribe', [TranscriptionController::class, 'store']);
+Route::get('/activity-calendar', [ActivityCalendarController::class, 'index']);
 Route::get('/analytics/summary', [AnalyticsController::class, 'summary']);
 Route::get('/analytics/co2', [AnalyticsController::class, 'co2']);
 Route::get('/analytics/failures', [AnalyticsController::class, 'failures']);
@@ -36,6 +38,7 @@ Route::get('/analytics/temperatures', [AnalyticsController::class, 'temperatures
 Route::get('/co2-control', [Co2ControlController::class, 'index']);
 Route::get('/equipment', [EquipmentController::class, 'index']);
 Route::get('/equipment/{equipment}', [EquipmentController::class, 'show']);
+Route::post('/equipment/{equipment}/work-logs', [EquipmentController::class, 'storeWorkLog']);
 Route::get('/handover', [HandoverController::class, 'index']);
 Route::patch('/handover/{handoverItem}', [HandoverController::class, 'update']);
 Route::get('/evening-preps', [EveningPrepController::class, 'show']);

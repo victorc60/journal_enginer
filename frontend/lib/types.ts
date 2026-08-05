@@ -34,6 +34,17 @@ export type MaintenanceEvent = {
   };
 };
 
+export type EquipmentWorkLog = {
+  id: number;
+  equipment_id: number;
+  performed_on: string;
+  action: string;
+  parts_used: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ShiftNote = {
   id: number;
   category: string;
@@ -124,6 +135,8 @@ export type EquipmentListItem = {
   }> | null;
   failures_count: number;
   maintenance_events_count: number;
+  work_logs_count?: number;
+  work_history_count: number;
   open_handover_items_count: number;
 };
 
@@ -141,11 +154,13 @@ export type EquipmentDetailResponse = {
     }> | null;
     failures: Failure[];
     maintenance_events: MaintenanceEvent[];
+    work_logs: EquipmentWorkLog[];
     handover_items: HandoverItem[];
   };
   summary: {
     failures_count: number;
     maintenance_count: number;
+    manual_work_logs_count: number;
     work_history_count: number;
     open_handover_items_count: number;
   };
@@ -194,6 +209,7 @@ export type MorningRoundRecord = {
 
 export type MorningRoundResponse = {
   date: string;
+  expected_is_slaughter_day: boolean;
   template_items: MorningRoundTemplateItem[];
   checklist_items: MorningRoundChecklistItem[];
   round: MorningRoundRecord | null;
@@ -232,6 +248,7 @@ export type EveningPrepRecord = {
 export type EveningPrepResponse = {
   prep_date: string;
   target_date: string;
+  expected_is_next_day_slaughter: boolean;
   checklist_items: EveningPrepChecklistItem[];
   prep: EveningPrepRecord | null;
 };
@@ -290,7 +307,61 @@ export type Co2ControlResponse = {
   rows: Co2ControlRow[];
 };
 
+export type ActivityCalendarItemKey =
+  | "morning_round"
+  | "evening_prep"
+  | "shift"
+  | "water"
+  | "co2";
+
+export type ActivityCalendarItem = {
+  key: ActivityCalendarItemKey;
+  label: string;
+  recorded: boolean;
+  expected: boolean;
+  value: string;
+  href: string;
+};
+
+export type ActivityCalendarDay = {
+  date: string;
+  day_number: number;
+  is_today: boolean;
+  is_work_day: boolean;
+  recorded_items_count: number;
+  expected_items_count: number;
+  completed_expected_count: number;
+  is_complete: boolean;
+  recorded_keys: ActivityCalendarItemKey[];
+  items: ActivityCalendarItem[];
+};
+
+export type ActivityCalendarResponse = {
+  month: string;
+  range: {
+    from: string;
+    to: string;
+  };
+  today: string;
+  summary: {
+    work_days_count: number;
+    active_days_count: number;
+    complete_days_count: number;
+    morning_round_days_count: number;
+    evening_prep_days_count: number;
+    water_log_days_count: number;
+    shift_days_count: number;
+    co2_days_count: number;
+  };
+  days: ActivityCalendarDay[];
+};
+
 export type SummaryResponse = {
+  range: {
+    from: string;
+    to: string;
+    scope: string;
+  };
   total_shifts: number;
   average_heads_count: number | null;
   average_co2_per_head_g: number | null;

@@ -58,9 +58,38 @@ class MorningRoundApiTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('date', '2026-07-27')
+            ->assertJsonPath('expected_is_slaughter_day', true)
             ->assertJsonCount(3, 'template_items')
             ->assertJsonCount(3, 'checklist_items')
             ->assertJsonPath('round', null);
+    }
+
+    public function test_it_marks_friday_as_non_slaughter_day_by_schedule(): void
+    {
+        $response = $this->getJson('/api/morning-rounds?date=2026-08-07');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('date', '2026-08-07')
+            ->assertJsonPath('expected_is_slaughter_day', false);
+
+        $item = MorningRoundItem::query()->firstOrFail();
+
+        $saveResponse = $this->postJson('/api/morning-rounds', [
+            'round_date' => '2026-08-07',
+            'is_slaughter_day' => true,
+            'entries' => [
+                [
+                    'morning_round_item_id' => $item->id,
+                    'is_checked' => true,
+                    'note' => 'Проверил.',
+                ],
+            ],
+        ]);
+
+        $saveResponse
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'По графику обход сохраняется только для рабочих дней с воскресенья по четверг.');
     }
 
     public function test_it_rejects_saving_non_slaughter_day_rounds(): void

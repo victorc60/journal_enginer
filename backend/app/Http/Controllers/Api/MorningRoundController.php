@@ -7,6 +7,7 @@ use App\Http\Requests\StoreMorningRoundRequest;
 use App\Models\MorningRound;
 use App\Models\MorningRoundEntry;
 use App\Models\MorningRoundItem;
+use App\Support\WorkWeek;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,14 @@ class MorningRoundController extends Controller
     public function store(StoreMorningRoundRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $roundDate = $this->resolveDate($validated['round_date']);
+        $expectedIsSlaughterDay = WorkWeek::isWorkDay($roundDate);
+
+        if (! $expectedIsSlaughterDay) {
+            return response()->json([
+                'message' => 'По графику обход сохраняется только для рабочих дней с воскресенья по четверг.',
+            ], 422);
+        }
 
         if (! $validated['is_slaughter_day']) {
             return response()->json([
@@ -32,7 +41,6 @@ class MorningRoundController extends Controller
             ], 422);
         }
 
-        $roundDate = $this->resolveDate($validated['round_date']);
         $submittedEntries = collect($validated['entries'] ?? [])
             ->keyBy(fn (array $entry): int => (int) $entry['morning_round_item_id']);
 
@@ -96,6 +104,7 @@ class MorningRoundController extends Controller
 
     private function payloadForDate(CarbonImmutable $date): array
     {
+        $expectedIsSlaughterDay = WorkWeek::isWorkDay($date);
         $templateItems = MorningRoundItem::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
@@ -155,6 +164,7 @@ class MorningRoundController extends Controller
 
         return [
             'date' => $date->toDateString(),
+            'expected_is_slaughter_day' => $expectedIsSlaughterDay,
             'template_items' => $templateItems,
             'checklist_items' => $mergedChecklistItems->values()->all(),
             'round' => $round ? [

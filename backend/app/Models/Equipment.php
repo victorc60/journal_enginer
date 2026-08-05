@@ -41,6 +41,11 @@ class Equipment extends Model
         return $this->hasMany(MaintenanceEvent::class);
     }
 
+    public function workLogs(): HasMany
+    {
+        return $this->hasMany(EquipmentWorkLog::class);
+    }
+
     public function handoverItems(): HasMany
     {
         return $this->hasMany(HandoverItem::class);

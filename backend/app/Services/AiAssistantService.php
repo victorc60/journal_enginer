@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\HandoverItem;
 use App\Models\Shift;
+use App\Support\WorkWeek;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\RequestException;
@@ -26,6 +27,12 @@ class AiAssistantService
         $shiftId = isset($options['shift_id']) ? (int) $options['shift_id'] : null;
         $fromDate = $this->normalizedDate($options['from_date'] ?? null);
         $toDate = $this->normalizedDate($options['to_date'] ?? null);
+
+        if ($scenario === 'weekly_summary' && $fromDate === null && $toDate === null) {
+            $range = WorkWeek::datesFor();
+            $fromDate = $range['from'];
+            $toDate = $range['to'];
+        }
 
         $shiftQuery = Shift::query()
             ->with([

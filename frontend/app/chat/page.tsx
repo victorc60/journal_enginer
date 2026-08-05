@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { apiBaseUrl, extractApiError } from "@/lib/api";
+import { getCurrentWorkWeekRange } from "@/lib/work-week";
 
 type ChatEntry = {
   id: number;
@@ -64,6 +65,19 @@ export default function ChatPage() {
   const [toDate, setToDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const applyScenario = (scenarioId: string, scenarioQuestion: string) => {
+    setScenario(scenarioId);
+    setQuestion(scenarioQuestion);
+    setErrorMessage(null);
+
+    if (scenarioId === "weekly_summary") {
+      const currentWorkWeek = getCurrentWorkWeekRange();
+
+      setFromDate(currentWorkWeek.from);
+      setToDate(currentWorkWeek.to);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -143,11 +157,7 @@ export default function ChatPage() {
                 key={item.id}
                 type="button"
                 className="example-chip"
-                onClick={() => {
-                  setScenario(item.id);
-                  setQuestion(item.question);
-                  setErrorMessage(null);
-                }}
+                onClick={() => applyScenario(item.id, item.question)}
               >
                 <strong>{item.label}</strong>
                 <span>{item.description}</span>
@@ -164,6 +174,7 @@ export default function ChatPage() {
                 onClick={() => {
                   setScenario("freeform");
                   setQuestion("");
+                  setErrorMessage(null);
                 }}
               >
                 Reset scenario
@@ -212,6 +223,16 @@ export default function ChatPage() {
               <input type="date" className="text-input" value={toDate} onChange={(event) => setToDate(event.target.value)} />
             </label>
           </div>
+
+          {scenario === "weekly_summary" ? (
+            <div className="status-banner status-success" role="status">
+              <p className="status-title">Недельная логика уже подставлена</p>
+              <p className="status-copy">
+                Для сводки автоматически выбран текущий рабочий диапазон с воскресенья по четверг. При необходимости
+                вы можете вручную изменить даты.
+              </p>
+            </div>
+          ) : null}
         </section>
 
         <div className="section-divider" />

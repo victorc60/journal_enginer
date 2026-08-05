@@ -7,6 +7,7 @@ use App\Http\Requests\StoreEveningPrepRequest;
 use App\Models\EveningPrep;
 use App\Models\EveningPrepEntry;
 use App\Models\EveningPrepItem;
+use App\Support\WorkWeek;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,15 @@ class EveningPrepController extends Controller
     public function store(StoreEveningPrepRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $prepDate = $this->resolveDate($validated['prep_date']);
+        $targetDate = $prepDate->addDay();
+        $expectedIsNextDaySlaughter = WorkWeek::isWorkDay($targetDate);
+
+        if (! $expectedIsNextDaySlaughter) {
+            return response()->json([
+                'message' => 'По графику вечерняя подготовка сохраняется только если следующий день попадает на рабочую неделю с воскресенья по четверг.',
+            ], 422);
+        }
 
         if (! $validated['is_next_day_slaughter']) {
             return response()->json([
@@ -32,8 +42,6 @@ class EveningPrepController extends Controller
             ], 422);
         }
 
-        $prepDate = $this->resolveDate($validated['prep_date']);
-        $targetDate = $prepDate->addDay();
         $submittedEntries = collect($validated['entries'] ?? [])
             ->keyBy(fn (array $entry): int => (int) $entry['evening_prep_item_id']);
 
@@ -90,6 +98,7 @@ class EveningPrepController extends Controller
 
     private function payloadForDate(CarbonImmutable $prepDate): array
     {
+        $expectedIsNextDaySlaughter = WorkWeek::isWorkDay($prepDate->addDay());
         $items = EveningPrepItem::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
@@ -128,6 +137,7 @@ class EveningPrepController extends Controller
         return [
             'prep_date' => $prepDate->toDateString(),
             'target_date' => $prep?->target_date?->toDateString() ?? $prepDate->addDay()->toDateString(),
+            'expected_is_next_day_slaughter' => $expectedIsNextDaySlaughter,
             'checklist_items' => $this->sortedChecklistItems($checklistItems)->values()->all(),
             'prep' => $prep ? [
                 'id' => $prep->id,

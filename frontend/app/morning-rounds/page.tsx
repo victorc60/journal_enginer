@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AccordionSection from "@/components/AccordionSection";
 import { apiBaseUrl, buildQuery, extractApiError, fetchJson } from "@/lib/api";
+import { getTodayInputValue } from "@/lib/work-week";
 import {
   MorningRoundChecklistItem,
   MorningRoundResponse,
@@ -26,13 +27,6 @@ const initialNewItemForm: NewItemFormState = {
 
 async function fetchMorningRoundData(date: string) {
   return fetchJson<MorningRoundResponse>(`/api/morning-rounds${buildQuery({ date })}`);
-}
-
-function getTodayInputValue() {
-  const now = new Date();
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-
-  return localDate.toISOString().slice(0, 10);
 }
 
 function sortTemplateItems(items: MorningRoundTemplateItem[]) {
@@ -116,6 +110,7 @@ export default function MorningRoundsPage() {
   const [loadingError, setLoadingError] = useState("");
   const [checklistItems, setChecklistItems] = useState<MorningRoundChecklistItem[]>([]);
   const [templateItems, setTemplateItems] = useState<MorningRoundTemplateItem[]>([]);
+  const [expectedIsSlaughterDay, setExpectedIsSlaughterDay] = useState(false);
   const [isSlaughterDay, setIsSlaughterDay] = useState(false);
   const [hasSavedRound, setHasSavedRound] = useState(false);
   const [savingRound, setSavingRound] = useState(false);
@@ -129,8 +124,9 @@ export default function MorningRoundsPage() {
   const applyResponseData = (data: MorningRoundResponse) => {
     setChecklistItems(sortChecklistItems(data.checklist_items));
     setTemplateItems(sortTemplateItems(data.template_items));
+    setExpectedIsSlaughterDay(Boolean(data.expected_is_slaughter_day));
     setHasSavedRound(Boolean(data.round));
-    setIsSlaughterDay(Boolean(data.round?.is_slaughter_day));
+    setIsSlaughterDay(Boolean(data.round?.is_slaughter_day ?? data.expected_is_slaughter_day));
     setLoadingError("");
   };
 
@@ -478,19 +474,35 @@ export default function MorningRoundsPage() {
                   <input
                     type="checkbox"
                     checked={hasSavedRound ? true : isSlaughterDay}
-                    disabled={hasSavedRound}
+                    disabled={hasSavedRound || !expectedIsSlaughterDay}
                     onChange={(event) => setIsSlaughterDay(event.target.checked)}
                   />
-                  <span>{hasSavedRound ? "Для этой даты уже сохранен день забоя" : "Сегодня день забоя"}</span>
+                  <span>
+                    {hasSavedRound
+                      ? "Для этой даты уже сохранен день забоя"
+                      : expectedIsSlaughterDay
+                        ? "Сегодня день забоя"
+                        : "Сегодня нерабочий день по графику"}
+                  </span>
                 </label>
                 {hasSavedRound ? <span className="tag-pill tag-pill-resolved">Обход уже сохранен</span> : null}
               </div>
 
-              {!hasSavedRound && !isSlaughterDay ? (
-                <div className="status-banner">
-                  <p className="status-title">Обычный день</p>
+              {!hasSavedRound && expectedIsSlaughterDay ? (
+                <div className="status-banner status-success" role="status">
+                  <p className="status-title">Рабочая неделя уже учтена</p>
                   <p className="status-copy">
-                    Можете пройтись по пунктам как по подсказке, но данные по этой дате сохраняться в базу не будут.
+                    По графику воскресенье, понедельник, вторник, среда и четверг считаются днями забоя. Чек-лист
+                    включается автоматически, но вы можете снять галочку, если это исключение.
+                  </p>
+                </div>
+              ) : null}
+
+              {!hasSavedRound && !expectedIsSlaughterDay ? (
+                <div className="status-banner">
+                  <p className="status-title">Пятница или суббота</p>
+                  <p className="status-copy">
+                    Можете пройтись по пунктам как по подсказке, но для нерабочего дня запись в базу не сохраняется.
                   </p>
                 </div>
               ) : null}

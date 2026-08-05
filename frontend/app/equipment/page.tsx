@@ -70,9 +70,7 @@ export default async function EquipmentPage() {
   try {
     const equipment = await fetchJson<EquipmentListItem[]>("/api/equipment");
     const groupedEquipment = groupEquipment(equipment);
-    const equipmentWithHistoryCount = equipment.filter(
-      (item) => item.failures_count + item.maintenance_events_count > 0,
-    ).length;
+    const equipmentWithHistoryCount = equipment.filter((item) => item.work_history_count > 0).length;
     const openTasksTotal = equipment.reduce((total, item) => total + item.open_handover_items_count, 0);
 
     return (
@@ -130,7 +128,7 @@ export default async function EquipmentPage() {
                       {item.service_points && item.service_points.length > 0 ? (
                         <span className="tag-pill">Элементов: {item.service_points.length}</span>
                       ) : null}
-                      <span className="tag-pill">История: {item.failures_count + item.maintenance_events_count}</span>
+                      <span className="tag-pill">История: {item.work_history_count}</span>
                       <span className="tag-pill">Открыто: {item.open_handover_items_count}</span>
                     </div>
 
