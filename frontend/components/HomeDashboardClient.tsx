@@ -88,6 +88,24 @@ const actionGroups = [
   },
 ] as const;
 
+const quickLaunchActions = [
+  {
+    label: "Записать смену",
+    hint: "Быстрый вход в основную запись дня.",
+    href: "/record",
+  },
+  {
+    label: "Открыть обход",
+    hint: "Утренний чек-лист и отметки.",
+    href: "/morning-rounds",
+  },
+  {
+    label: "Вода и CO2",
+    hint: "Счётчики, химия и расход.",
+    href: "/water-co2",
+  },
+] as const;
+
 const weekdayLabels = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"] as const;
 
 const calendarLegend: Array<{ key: ActivityCalendarItemKey; label: string }> = [
@@ -203,16 +221,43 @@ function selectedDaySummary(day: ActivityCalendarDay) {
   return `Сохранено ${day.completed_expected_count} из ${day.expected_items_count} ожидаемых записей.`;
 }
 
+function sortDayItems(items: ActivityCalendarItem[]) {
+  return [...items].sort((left, right) => {
+    const leftRank = left.expected && !left.recorded ? 0 : left.recorded ? 1 : 2;
+    const rightRank = right.expected && !right.recorded ? 0 : right.recorded ? 1 : 2;
+
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+
+    return left.label.localeCompare(right.label, "ru");
+  });
+}
+
+function focusCardClass(item: ActivityCalendarItem) {
+  if (item.expected && !item.recorded) {
+    return "list-card focus-card focus-card-attention";
+  }
+
+  if (item.recorded) {
+    return "list-card focus-card focus-card-complete";
+  }
+
+  return "list-card focus-card";
+}
+
 export default function HomeDashboardClient({
   initialCalendar,
   initialCalendarError = null,
 }: HomeDashboardClientProps) {
   const [calendar, setCalendar] = useState<ActivityCalendarResponse | null>(initialCalendar);
   const [selectedDate, setSelectedDate] = useState(initialCalendar ? pickSelectedDate(initialCalendar) : "");
+  const [isDaySheetOpen, setIsDaySheetOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [calendarError, setCalendarError] = useState(initialCalendarError);
 
   const month = calendar?.month ?? getCurrentMonthKey();
+  const currentMonthKey = getCurrentMonthKey();
 
   useEffect(() => {
     if (calendar !== null) {
@@ -264,9 +309,32 @@ export default function HomeDashboardClient({
     };
   }, [calendar]);
 
+  useEffect(() => {
+    if (!isDaySheetOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsDaySheetOpen(false);
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDaySheetOpen]);
+
   const loadMonth = async (nextMonth: string) => {
     setLoading(true);
     setCalendarError(null);
+    setIsDaySheetOpen(false);
 
     try {
       const response = await fetch(`${apiBaseUrl}/api/activity-calendar${buildQuery({ month: nextMonth })}`, {
@@ -296,11 +364,17 @@ export default function HomeDashboardClient({
     () => (calendar ? buildCalendarCells(calendar.days, calendar.month) : []),
     [calendar],
   );
+  const todayDay =
+    calendar?.month === currentMonthKey
+      ? (calendar.days.find((day) => day.is_today) ?? null)
+      : null;
   const selectedDay =
     calendar?.days.find((day) => day.date === selectedDate) ??
     calendar?.days.find((day) => day.is_today) ??
     calendar?.days[0] ??
     null;
+  const todayItems = todayDay ? sortDayItems(todayDay.items) : [];
+  const missingTodayItems = todayItems.filter((item) => item.expected && !item.recorded);
 
   return (
     <main className="page-shell page-shell-top">
@@ -353,6 +427,91 @@ export default function HomeDashboardClient({
 
         <div className="home-layout">
           <div className="home-primary-column">
+            <section className="detail-section home-focus-section">
+              <div className="section-heading-wrap">
+                <h2 className="section-heading">Сегодняшний статус</h2>
+                <p className="section-text">
+                  Самое важное на текущий день: что уже записано и куда нужно зайти дальше без лишних переходов.
+                </p>
+              </div>
+
+              {todayDay ? (
+                <>
+                  <div className="tag-row">
+                    <span className="tag-pill tag-pill-high">{formatFullDate(todayDay.date)}</span>
+                    <span className={todayDay.is_complete ? "tag-pill tag-pill-resolved" : "tag-pill tag-pill-high"}>
+                      Закрыто: {todayDay.completed_expected_count}/{todayDay.expected_items_count}
+                    </span>
+                    <span className="tag-pill">Записей: {todayDay.recorded_items_count}</span>
+                  </div>
+
+                  {missingTodayItems.length > 0 ? (
+                    <div className="status-banner status-warning" role="status">
+                      <p className="status-title">Есть незакрытые действия на сегодня</p>
+                      <p className="status-copy">
+                        Сначала имеет смысл добить обязательные записи: {missingTodayItems.map((item) => item.label).join(", ")}.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="status-banner status-success" role="status">
+                      <p className="status-title">Обязательная часть дня закрыта</p>
+                      <p className="status-copy">Все ожидаемые записи на текущий день уже сохранены.</p>
+                    </div>
+                  )}
+
+                  <div className="home-quick-launch">
+                    {quickLaunchActions.map((action) => (
+                      <Link key={action.label} href={action.href} className="home-quick-launch-card">
+                        <span className="action-button-label">{action.label}</span>
+                        <span className="action-button-hint">{action.hint}</span>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <div className="list-stack">
+                    {todayItems.map((item) => (
+                      <article key={`today-${item.key}`} className={focusCardClass(item)}>
+                        <div className="toolbar-row toolbar-row-spread">
+                          <div className="calendar-sheet-item-copy">
+                            <div className="calendar-sheet-item-topline">
+                              <span
+                                className={`calendar-indicator calendar-indicator-${item.key}`}
+                                aria-hidden="true"
+                              />
+                              <p className="entry-title">{item.label}</p>
+                            </div>
+                            <p className="entry-copy">{item.value}</p>
+                          </div>
+                          <span className={statusBadgeClass(item)}>{statusBadgeLabel(item)}</span>
+                        </div>
+
+                        <Link href={item.href} className="text-link">
+                          Открыть раздел
+                        </Link>
+                      </article>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="status-banner" role="status">
+                  <p className="status-title">Сейчас открыт не текущий месяц</p>
+                  <p className="status-copy">
+                    Вернитесь к текущему месяцу, чтобы быстро увидеть оперативный статус сегодняшнего дня.
+                  </p>
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void loadMonth(currentMonthKey)}
+                      disabled={loading}
+                    >
+                      Открыть текущий месяц
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+
             <section className="detail-section home-calendar-section">
               <div className="calendar-toolbar">
                 <div className="section-heading-wrap">
@@ -364,6 +523,14 @@ export default function HomeDashboardClient({
                 </div>
 
                 <div className="calendar-nav">
+                  <button
+                    type="button"
+                    className="secondary-button calendar-today-button"
+                    onClick={() => void loadMonth(currentMonthKey)}
+                    disabled={loading && month === currentMonthKey}
+                  >
+                    Сегодня
+                  </button>
                   <button
                     type="button"
                     className="calendar-nav-button"
@@ -429,7 +596,10 @@ export default function HomeDashboardClient({
                             ]
                               .filter(Boolean)
                               .join(" ")}
-                            onClick={() => setSelectedDate(day.date)}
+                            onClick={() => {
+                              setSelectedDate(day.date);
+                              setIsDaySheetOpen(true);
+                            }}
                           >
                             <span className="calendar-day-top">
                               <span className="calendar-day-number">{day.day_number}</span>
@@ -454,7 +624,7 @@ export default function HomeDashboardClient({
                                   />
                                 ))
                               ) : (
-                                <span className="calendar-day-empty">Нет записей</span>
+                                <span className="calendar-day-empty">Пусто</span>
                               )}
                             </span>
                           </button>
@@ -465,42 +635,6 @@ export default function HomeDashboardClient({
                     </div>
                   </div>
 
-                  {selectedDay ? (
-                    <section className="detail-section home-day-panel">
-                      <div className="section-heading-wrap">
-                        <h2 className="section-heading">{formatFullDate(selectedDay.date)}</h2>
-                        <p className="section-text">{selectedDaySummary(selectedDay)}</p>
-                      </div>
-
-                      <div className="tag-row">
-                        <span className={selectedDay.is_work_day ? "tag-pill tag-pill-high" : "tag-pill"}>
-                          {selectedDay.is_work_day ? "Рабочий день" : "Вне графика"}
-                        </span>
-                        <span className={selectedDay.is_complete ? "tag-pill tag-pill-resolved" : "tag-pill"}>
-                          Ожидаемо закрыто: {selectedDay.completed_expected_count}/{selectedDay.expected_items_count}
-                        </span>
-                        <span className="tag-pill">Всего записей: {selectedDay.recorded_items_count}</span>
-                      </div>
-
-                      <div className="list-stack">
-                        {selectedDay.items.map((item) => (
-                          <article key={`${selectedDay.date}-${item.key}`} className="list-card">
-                            <div className="toolbar-row toolbar-row-spread">
-                              <div>
-                                <p className="entry-title">{item.label}</p>
-                                <p className="entry-copy">{item.value}</p>
-                              </div>
-                              <span className={statusBadgeClass(item)}>{statusBadgeLabel(item)}</span>
-                            </div>
-
-                            <Link href={item.href} className="text-link">
-                              Открыть раздел
-                            </Link>
-                          </article>
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
                 </>
               ) : null}
             </section>
@@ -540,6 +674,80 @@ export default function HomeDashboardClient({
           </aside>
         </div>
       </section>
+
+      {selectedDay && isDaySheetOpen ? (
+        <div
+          className="calendar-sheet-backdrop"
+          role="presentation"
+          onClick={() => setIsDaySheetOpen(false)}
+        >
+          <section
+            className="calendar-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calendar-sheet-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="calendar-sheet-handle" aria-hidden="true" />
+
+            <div className="calendar-sheet-header">
+              <div className="section-heading-wrap">
+                <h2 id="calendar-sheet-title" className="section-heading">
+                  {formatFullDate(selectedDay.date)}
+                </h2>
+                <p className="section-text">{selectedDaySummary(selectedDay)}</p>
+              </div>
+
+              <button
+                type="button"
+                className="calendar-sheet-close"
+                onClick={() => setIsDaySheetOpen(false)}
+                aria-label="Закрыть детали дня"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="tag-row">
+              <span className={selectedDay.is_work_day ? "tag-pill tag-pill-high" : "tag-pill"}>
+                {selectedDay.is_work_day ? "Рабочий день" : "Вне графика"}
+              </span>
+              <span className={selectedDay.is_complete ? "tag-pill tag-pill-resolved" : "tag-pill"}>
+                Ожидаемо закрыто: {selectedDay.completed_expected_count}/{selectedDay.expected_items_count}
+              </span>
+              <span className="tag-pill">Всего записей: {selectedDay.recorded_items_count}</span>
+            </div>
+
+            <div className="list-stack calendar-sheet-list">
+              {selectedDay.items.map((item) => (
+                <article key={`${selectedDay.date}-${item.key}`} className="list-card calendar-sheet-card">
+                  <div className="toolbar-row toolbar-row-spread">
+                    <div className="calendar-sheet-item-copy">
+                      <div className="calendar-sheet-item-topline">
+                        <span
+                          className={`calendar-indicator calendar-indicator-${item.key}`}
+                          aria-hidden="true"
+                        />
+                        <p className="entry-title">{item.label}</p>
+                      </div>
+                      <p className="entry-copy">{item.value}</p>
+                    </div>
+                    <span className={statusBadgeClass(item)}>{statusBadgeLabel(item)}</span>
+                  </div>
+
+                  <Link
+                    href={item.href}
+                    className="text-link"
+                    onClick={() => setIsDaySheetOpen(false)}
+                  >
+                    Открыть раздел
+                  </Link>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
